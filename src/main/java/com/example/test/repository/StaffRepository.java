@@ -23,8 +23,6 @@ public interface StaffRepository extends JpaRepository<Staff, Integer> {
     // Tìm Staff theo email (có thể dùng email để login)
     Optional<Staff> findByEmail(String email);
 
-    List<Staff> findByRole(String role);
-
 
     // Kiểm tra username có tồn tại không
     boolean existsByUserName(String userName);

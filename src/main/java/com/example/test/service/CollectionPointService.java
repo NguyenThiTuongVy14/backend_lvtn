@@ -2,8 +2,10 @@ package com.example.test.service;
 
 import com.example.test.dto.UpdateStatusRequest;
 import com.example.test.dto.WebSocketMessage;
+import com.example.test.entity.Authority;
 import com.example.test.entity.JobPosition;
 import com.example.test.entity.Staff;
+import com.example.test.repository.AuthorityRepository;
 import com.example.test.repository.JobPositionRepository;
 import com.example.test.repository.StaffRepository;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -18,14 +20,17 @@ public class CollectionPointService {
 
     private final JobPositionRepository jobPositionRepository;
     private final StaffRepository staffRepository;
+    private final AuthorityRepository authorityRepository;
     private final SimpMessagingTemplate messagingTemplate;
 
     @Autowired
     public CollectionPointService(JobPositionRepository jobPositionRepository,
                                   StaffRepository staffRepository,
+                                  AuthorityRepository authorityRepository,
                                   SimpMessagingTemplate messagingTemplate) {
         this.jobPositionRepository = jobPositionRepository;
         this.staffRepository = staffRepository;
+        this.authorityRepository = authorityRepository;
         this.messagingTemplate = messagingTemplate;
     }
 
@@ -37,19 +42,25 @@ public class CollectionPointService {
 
         // Kiểm tra người dùng
         Staff staff = staffRepository.findByUserName(username);
-        if (staff == null) {
-            throw new IllegalArgumentException("Invalid user");
+        if (staff == null || staff.getAuthorityId() == null) {
+            throw new IllegalArgumentException("Invalid user or authority");
         }
 
-        // Kiểm tra vai trò COLLECTOR
-        if (!staff.getRole().equals("COLLECTOR")) {
+        // Lấy vai trò từ authority_id
+        Authority authority = authorityRepository.findById(staff.getAuthorityId())
+                .orElseThrow(() -> new IllegalArgumentException("Invalid authority ID: " + staff.getAuthorityId()));
+        if (!authority.getName().equals("COLLECTOR")) {
             throw new IllegalArgumentException("Only COLLECTOR can update collection point status");
+        }
+
+        // Kiểm tra trạng thái hợp lệ
+        if (!isValidStatus(request.getStatus())) {
+            throw new IllegalArgumentException("Invalid status. Must be PENDING or COMPLETED");
         }
 
         // Cập nhật trạng thái
         position.setStatus(request.getStatus());
         position.setUpdatedAt(LocalDateTime.now());
-        position.setUpdatedBy(staff);
         JobPosition updatedPosition = jobPositionRepository.save(position);
 
         // Gửi thông báo WebSocket
@@ -63,9 +74,13 @@ public class CollectionPointService {
         messagingTemplate.convertAndSend("/topic/collection-point-updates", wsMessage);
         // Gửi đến admin
         messagingTemplate.convertAndSend("/topic/admin", wsMessage);
-        // Gửi đến collector (nếu cần)
+        // Gửi đến collector
         messagingTemplate.convertAndSend("/topic/collector/" + staff.getId(), wsMessage);
 
         return updatedPosition;
+    }
+
+    private boolean isValidStatus(String status) {
+        return "PENDING".equals(status) || "COMPLETED".equals(status);
     }
 }

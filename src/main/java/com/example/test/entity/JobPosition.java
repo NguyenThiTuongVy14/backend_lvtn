@@ -23,12 +23,17 @@ public class JobPosition {
 
     private String image;
 
-    private String status;
+    private String status;//ACTIVE; INACTIVE
+
+    @Column(name = "required_tonnage")
+    private BigDecimal requiredTonnage; // Tải trọng yêu cầu (tấn)
+
+    @Column(name = "created_by")
+    private Integer createdBy; // ID của admin tạo điểm làm việc
+
+    @Column(name = "created_at")
+    private LocalDateTime createdAt;
 
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
-
-    @ManyToOne
-    @JoinColumn(name = "updated_by")
-    private Staff updatedBy;
 }

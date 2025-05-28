@@ -2,8 +2,10 @@ package com.example.test.service;
 
 import com.example.test.dto.UpdateStatusRequest;
 import com.example.test.dto.WebSocketMessage;
+import com.example.test.entity.Authority;
 import com.example.test.entity.CollectionRequest;
 import com.example.test.entity.Staff;
+import com.example.test.repository.AuthorityRepository;
 import com.example.test.repository.CollectionRequestRepository;
 import com.example.test.repository.StaffRepository;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -18,14 +20,17 @@ public class CollectionRequestService {
 
     private final CollectionRequestRepository collectionRequestRepository;
     private final StaffRepository staffRepository;
+    private final AuthorityRepository authorityRepository;
     private final SimpMessagingTemplate messagingTemplate;
 
     @Autowired
     public CollectionRequestService(CollectionRequestRepository collectionRequestRepository,
                                     StaffRepository staffRepository,
+                                    AuthorityRepository authorityRepository,
                                     SimpMessagingTemplate messagingTemplate) {
         this.collectionRequestRepository = collectionRequestRepository;
         this.staffRepository = staffRepository;
+        this.authorityRepository = authorityRepository;
         this.messagingTemplate = messagingTemplate;
     }
 
@@ -45,7 +50,12 @@ public class CollectionRequestService {
         // Kiểm tra vai trò COLLECTOR
         Staff collector = staffRepository.findById(request.getCollector().getId())
                 .orElseThrow(() -> new IllegalArgumentException("Collector not found"));
-        if (!collector.getRole().equals("COLLECTOR")) {
+        if (collector.getAuthorityId() == null) {
+            throw new IllegalArgumentException("Collector has no assigned authority");
+        }
+        Authority authority = authorityRepository.findById(collector.getAuthorityId())
+                .orElseThrow(() -> new IllegalArgumentException("Invalid authority ID: " + collector.getAuthorityId()));
+        if (!authority.getName().equals("COLLECTOR")) {
             throw new IllegalArgumentException("Selected staff is not a COLLECTOR");
         }
 
@@ -72,6 +82,16 @@ public class CollectionRequestService {
         // Tìm yêu cầu thu gom
         CollectionRequest collectionRequest = collectionRequestRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Collection request not found"));
+
+        // Kiểm tra vai trò COLLECTOR
+        if (updater.getAuthorityId() == null) {
+            throw new IllegalArgumentException("Updater has no assigned authority");
+        }
+        Authority authority = authorityRepository.findById(updater.getAuthorityId())
+                .orElseThrow(() -> new IllegalArgumentException("Invalid authority ID: " + updater.getAuthorityId()));
+        if (!authority.getName().equals("COLLECTOR")) {
+            throw new IllegalArgumentException("Only COLLECTOR can update collection request status");
+        }
 
         // Kiểm tra quyền cập nhật
         if (!collectionRequest.getCollector().getId().equals(updater.getId())) {

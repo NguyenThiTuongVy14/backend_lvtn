@@ -1,74 +1,46 @@
 package com.example.test.entity;
 
 import jakarta.persistence.*;
+import lombok.Data;
+import lombok.Getter;
+import lombok.Setter;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 
+@Setter
+@Getter
 @Entity
 @Table(name = "t_job_rotation")
+@Data
 public class JobRotation {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Integer id;
 
-    @ManyToOne
-    @JoinColumn(name = "position_id")
-    private JobPosition jobPosition;
+    @Column(name = "staff_id")
+    private Integer staffId; // ID nhân viên được phân công
 
-    @ManyToOne
-    @JoinColumn(name = "user_id")
-    private Staff staff;
+    @Column(name = "job_position_id")
+    private Integer jobPositionId; // ID vị trí công việc
 
-    private String status;
+    @Column(name = "vehicle_id")
+    private Integer vehicleId; // ID xe
 
-    private LocalDate fromDay;
-    private LocalDate toDay;
+    @Column(name = "created_by")
+    private Integer createdBy; // ID nhân viên tạo lịch phân công
 
-    public LocalDate getToDay() {
-        return toDay;
-    }
+    private String status; // Trạng thái: ROTATION_ACTIVE, ROTATION_INACTIVE
 
-    public void setToDay(LocalDate toDay) {
-        this.toDay = toDay;
-    }
+    @Column(name = "start_date")
+    private LocalDateTime startDate; // Ngày bắt đầu
 
-    public LocalDate getFromDay() {
-        return fromDay;
-    }
+    @Column(name = "end_date")
+    private LocalDateTime endDate; // Ngày kết thúc
 
-    public void setFromDay(LocalDate fromDay) {
-        this.fromDay = fromDay;
-    }
+    @Column(name = "created_at")
+    private LocalDateTime createdAt; // Thời gian tạo
 
-    public String getStatus() {
-        return status;
-    }
-
-    public void setStatus(String status) {
-        this.status = status;
-    }
-
-    public Staff getStaff() {
-        return staff;
-    }
-
-    public void setStaff(Staff staff) {
-        this.staff = staff;
-    }
-
-    public JobPosition getJobPosition() {
-        return jobPosition;
-    }
-
-    public void setJobPosition(JobPosition jobPosition) {
-        this.jobPosition = jobPosition;
-    }
-
-    public Integer getId() {
-        return id;
-    }
-
-    public void setId(Integer id) {
-        this.id = id;
-    }
+    @Column(name = "updated_at")
+    private LocalDateTime updatedAt; // Thời gian cập nhật
 }

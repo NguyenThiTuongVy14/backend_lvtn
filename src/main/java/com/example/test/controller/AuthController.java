@@ -10,6 +10,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;
 
@@ -47,6 +48,12 @@ public class AuthController {
             return ResponseEntity.status(401).body("{\"error\": \"Invalid username or password\"}");
         }
     }
+    @PostMapping("/logout")
+    public ResponseEntity<?> logout() {
+        SecurityContextHolder.clearContext();
+        return ResponseEntity.ok("{\"message\": \"Logout successfully\"}");
+    }
+
 
     private String generateJwtToken(UserDetails userDetails) {
         return Jwts.builder()

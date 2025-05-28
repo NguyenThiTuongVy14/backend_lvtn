@@ -1,13 +1,14 @@
 package com.example.test.entity;
 
-
 import jakarta.persistence.*;
-import lombok.Data;
-import java.util.List;
+import lombok.Getter;
+import lombok.Setter;
+import java.time.LocalDate;
 
-
+@Setter
+@Getter
 @Entity
-@Table(name = "t_staff")
+@Table(name = "t_user")
 public class Staff {
 
     @Id
@@ -20,6 +21,24 @@ public class Staff {
     @Column(name = "full_name")
     private String fullName;
 
+    @Column(name = "day_of_birth")
+    private LocalDate dayOfBirth;
+
+    private String phone;
+
+    private String address;
+
+    @Column(name = "personal_id")
+    private String personalId;
+
+    private Integer gender;
+
+    @Column(name = "start_day")
+    private LocalDate startDay;
+
+    @Column(name = "end_day")
+    private LocalDate endDay;
+
     @Column(name = "user_name")
     private String userName;
 
@@ -31,80 +50,4 @@ public class Staff {
 
     @Column(name = "authority_id")
     private Integer authorityId;
-    @Column(name = "role")
-    private String role;
-
-    public String getRole() {
-        return role;
-    }
-
-    public void setRole(String role) {
-        this.role = role;
-    }
-
-    public Integer getId() {
-        return id;
-    }
-
-    public void setId(Integer id) {
-        this.id = id;
-    }
-
-    public String getStaffCode() {
-        return staffCode;
-    }
-
-    public void setStaffCode(String staffCode) {
-        this.staffCode = staffCode;
-    }
-
-    public String getFullName() {
-        return fullName;
-    }
-
-    public void setFullName(String fullName) {
-        this.fullName = fullName;
-    }
-
-    public String getUserName() {
-        return userName;
-    }
-
-    public void setUserName(String userName) {
-        this.userName = userName;
-    }
-
-    public String getEmail() {
-        return email;
-    }
-
-    public void setEmail(String email) {
-        this.email = email;
-    }
-
-
-    public String getPassword() {
-        return password;
-    }
-
-    public void setPassword(String password) {
-        this.password = password;
-    }
-
-    public String getStatus() {
-        return status;
-    }
-
-    public void setStatus(String status) {
-        this.status = status;
-    }
-
-    public Integer getAuthorityId() {
-        return authorityId;
-    }
-
-    public void setAuthorityId(Integer authorityId) {
-        this.authorityId = authorityId;
-    }
 }
-
