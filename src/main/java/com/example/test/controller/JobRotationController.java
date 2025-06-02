@@ -173,7 +173,7 @@ public class JobRotationController {
                         .body(new ErrorMessage("Người dùng không hợp lệ"));
             }
 
-            List<JobRotation> activeRotations = jobRotationRepository.findByStaffIdAndStatus(staff.getId(), "ROTATION_ACTIVE");
+            List<JobRotation> activeRotations = jobRotationRepository.findByStaffIdAndStatus(staff.getId(), "ACTIVE");
             return ResponseEntity.ok(activeRotations);
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)

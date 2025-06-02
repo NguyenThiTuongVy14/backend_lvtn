@@ -24,5 +24,4 @@ public interface JobPositionRepository extends JpaRepository<JobPosition, Intege
     List<JobPosition> findByIdAndStatus(Integer id, String status);
 
     // Tìm vị trí công việc theo tải trọng yêu cầu
-    List<JobPosition> findByRequiredTonnageGreaterThanEqual(BigDecimal tonnage);
 }

@@ -6,6 +6,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
+import java.util.Optional;
 
 @Repository
 public interface JobRotationRepository extends JpaRepository<JobRotation, Integer> {
@@ -28,4 +29,7 @@ public interface JobRotationRepository extends JpaRepository<JobRotation, Intege
             "JOIN t_job_position jp ON jr.job_position_id = jp.id " +
             "GROUP BY jp.name", nativeQuery = true)
     List<Object[]> getRotationStatistics();
+
+    Optional<JobRotation> findByStaffIdAndJobPositionId(Integer staffId, Integer jobPositionId);
+    List<JobRotation> findByJobPositionIdAndStatus(Integer jobPositionId, String status);
 }

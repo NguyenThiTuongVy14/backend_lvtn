@@ -30,7 +30,7 @@ public class JobRotation {
     @Column(name = "created_by")
     private Integer createdBy; // ID nhân viên tạo lịch phân công
 
-    private String status; // Trạng thái: ROTATION_ACTIVE, ROTATION_INACTIVE
+    private String status; // Trạng thái: PENDING; ASSIGNED; COMPLETED; CANCEL; FAIL
 
     @Column(name = "start_date")
     private LocalDateTime startDate; // Ngày bắt đầu

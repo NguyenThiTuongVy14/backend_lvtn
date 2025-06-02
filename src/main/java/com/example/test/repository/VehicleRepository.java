@@ -9,5 +9,5 @@ import java.util.List;
 
 @Repository
 public interface VehicleRepository extends JpaRepository<Vehicle, Integer> {
-    List<Vehicle> findByStatusAndTonnageGreaterThanEqual(String status, BigDecimal tonnage);
+    List<Vehicle> findByStatus(String status);
 }

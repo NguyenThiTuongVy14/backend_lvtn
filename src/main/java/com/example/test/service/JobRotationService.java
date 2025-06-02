@@ -99,7 +99,7 @@ public class JobRotationService {
         return jobRotationRepository.save(rotation);
     }
 
-    // Phân công tự động lịch phân công cho tài xế dựa trên tải trọng xe
+    // Phân công tự động lịch phân công cho tài xế
     @Transactional
     public List<JobRotation> autoAssignJobRotations() {
         List<JobRotation> assignedRotations = new ArrayList<>();
@@ -126,27 +126,22 @@ public class JobRotationService {
 
         // Phân công công việc cho tài xế
         for (JobPosition position : activePositions) {
-            if (position.getRequiredTonnage() == null) {
-                continue; // Bỏ qua nếu không có yêu cầu tải trọng
+            // Tìm xe khả dụng
+            List<Vehicle> availableVehicles = vehicleRepository.findByStatus("AVAILABLE");
+            if (availableVehicles.isEmpty()) {
+                continue; // Bỏ qua nếu không có xe khả dụng
             }
 
-            // Tìm xe phù hợp với tải trọng yêu cầu
-            List<Vehicle> suitableVehicles = vehicleRepository.findByStatusAndTonnageGreaterThanEqual(
-                    "AVAILABLE", position.getRequiredTonnage());
-            if (suitableVehicles.isEmpty()) {
-                continue; // Bỏ qua nếu không có xe phù hợp
-            }
-
-            // Chọn tài xế ngẫu nhiên (có thể cải tiến bằng thuật toán tối ưu)
+            // Chọn tài xế ngẫu nhiên
             Staff driver = drivers.get((int) (Math.random() * drivers.size()));
-            Vehicle vehicle = suitableVehicles.get(0); // Chọn xe đầu tiên phù hợp
+            Vehicle vehicle = availableVehicles.get(0); // Chọn xe đầu tiên khả dụng
 
             // Tạo lịch phân công
             JobRotation rotation = new JobRotation();
             rotation.setStaffId(driver.getId());
             rotation.setJobPositionId(position.getId());
             rotation.setVehicleId(vehicle.getId());
-            rotation.setCreatedBy(createdBy); // Gán người tạo
+            rotation.setCreatedBy(createdBy);
             rotation.setStatus("ACTIVE");
             rotation.setStartDate(LocalDateTime.now());
             rotation.setCreatedAt(LocalDateTime.now());
@@ -182,18 +177,6 @@ public class JobRotationService {
         }
         if (jobRotation.getStartDate() == null) {
             throw new IllegalArgumentException("Ngày bắt đầu là bắt buộc");
-        }
-
-        // Kiểm tra tải trọng xe nếu nhân viên là tài xế
-        Optional<Staff> staff = staffRepository.findById(jobRotation.getStaffId());
-        Optional<JobPosition> position = jobPositionRepository.findById(jobRotation.getJobPositionId());
-        Optional<Vehicle> vehicle = vehicleRepository.findById(jobRotation.getVehicleId());
-        if (staff.isPresent() && staffRepository.findAuthorityNameByStaffId(staff.get().getId())
-                .map(auth -> auth.equals("DRIVER")).orElse(false) &&
-                position.isPresent() && vehicle.isPresent() && position.get().getRequiredTonnage() != null) {
-            if (vehicle.get().getTonnage().compareTo(position.get().getRequiredTonnage()) < 0) {
-                throw new IllegalArgumentException("Tải trọng xe không đáp ứng yêu cầu công việc");
-            }
         }
     }
 }
