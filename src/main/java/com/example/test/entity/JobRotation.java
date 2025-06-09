@@ -7,6 +7,7 @@ import lombok.Setter;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.Date;
 
 @Setter
 @Getter
@@ -21,22 +22,22 @@ public class JobRotation {
     @Column(name = "staff_id")
     private Integer staffId; // ID nhân viên được phân công
 
-    @Column(name = "job_position_id")
-    private Integer jobPositionId; // ID vị trí công việc
+    @Column(name = "position_id")
+    private Integer jobPositionId; // ID địa điểm công việc
 
     @Column(name = "vehicle_id")
     private Integer vehicleId; // ID xe
 
+    private int shift_id; //Ca làm
+
+    private Date rotation_date;
+
+    private String role; //COLLECTOR, DRIVER
+
+    private String status; //COMPLETED, PENDING, FAIL
+
     @Column(name = "created_by")
-    private Integer createdBy; // ID nhân viên tạo lịch phân công
-
-    private String status; // Trạng thái: PENDING; ASSIGNED; COMPLETED; CANCEL; FAIL
-
-    @Column(name = "start_date")
-    private LocalDateTime startDate; // Ngày bắt đầu
-
-    @Column(name = "end_date")
-    private LocalDateTime endDate; // Ngày kết thúc
+    private Integer createdBy; // ID admin tạo lịch phân công
 
     @Column(name = "created_at")
     private LocalDateTime createdAt; // Thời gian tạo

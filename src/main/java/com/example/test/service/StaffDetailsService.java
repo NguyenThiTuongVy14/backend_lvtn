@@ -24,6 +24,8 @@ public class StaffDetailsService implements UserDetailsService {
 
     @Override
     public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
+        System.out.println("=== LOADING USER: " + username + " ===");
+
         Staff staff = staffRepository.findByUserName(username);
         if (staff == null) {
             throw new UsernameNotFoundException("User not found: " + username);
@@ -32,8 +34,9 @@ public class StaffDetailsService implements UserDetailsService {
         String authorityName = staffRepository.findAuthorityNameByUserName(username)
                 .orElse("USER");
 
-        List<SimpleGrantedAuthority> authorities;
+        System.out.println("Authority from DB: '" + authorityName + "'");
 
+        List<SimpleGrantedAuthority> authorities;
         if ("ADMIN".equalsIgnoreCase(authorityName)) {
             authorities = Arrays.asList(
                     new SimpleGrantedAuthority("ADMIN"),
@@ -46,7 +49,12 @@ public class StaffDetailsService implements UserDetailsService {
             );
         }
 
-        return new User(staff.getUserName(), staff.getPassword(), authorities);
+        System.out.println("Final authorities: " + authorities);
+        UserDetails result = new User(staff.getUserName(), staff.getPassword(), authorities);
+        System.out.println("UserDetails authorities: " + result.getAuthorities());
+        System.out.println("=================================");
+
+        return result;
     }
 
 }

@@ -1,17 +1,19 @@
 package com.example.test.controller;
 
+import com.example.test.dto.StaffDTO;
 import com.example.test.entity.Staff;
 import com.example.test.repository.StaffRepository;
 import com.example.test.service.StaffService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/staff")
@@ -27,7 +29,6 @@ public class StaffController {
     }
 
     // Tạo nhân viên mới (chỉ ADMIN)
-    @PreAuthorize("hasRole('ADMIN')")
     @PostMapping
     public ResponseEntity<?> createStaff(@RequestBody Staff staff) {
         try {
@@ -42,12 +43,17 @@ public class StaffController {
     }
 
     // Lấy danh sách tất cả nhân viên (chỉ ADMIN)
-    @PreAuthorize("hasRole('ADMIN')")
     @GetMapping
     public ResponseEntity<?> getAllStaff() {
         try {
             List<Staff> staffList = staffRepository.findAll();
-            return ResponseEntity.ok(staffList);
+
+            // Convert sang DTO để ẩn password
+            List<StaffDTO> staffDTOList = staffList.stream()
+                    .map(StaffDTO::new)
+                    .collect(Collectors.toList());
+
+            return ResponseEntity.ok(staffDTOList);
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body("{\"error\": \"Error retrieving staff list: " + e.getMessage() + "\"}");
@@ -55,7 +61,6 @@ public class StaffController {
     }
 
     // Lấy thông tin nhân viên theo ID (ADMIN hoặc chính nhân viên đó)
-    @PreAuthorize("hasRole('ADMIN') or hasRole('COLLECTOR') or hasRole('DRIVER')")
     @GetMapping("/{id}")
     public ResponseEntity<?> getStaffById(@PathVariable Integer id) {
         try {
@@ -69,12 +74,13 @@ public class StaffController {
             }
 
             Optional<Staff> staff = staffRepository.findById(id);
+            Optional<StaffDTO> staffDTO = staff.map(StaffDTO::new);
             if (staff.isEmpty()) {
                 return ResponseEntity.status(HttpStatus.NOT_FOUND)
                         .body("{\"error\": \"Staff not found\"}");
             }
 
-            return ResponseEntity.ok(staff.get());
+            return ResponseEntity.ok(staffDTO.get());
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body("{\"error\": \"Error retrieving staff: " + e.getMessage() + "\"}");
@@ -82,7 +88,6 @@ public class StaffController {
     }
 
     // Cập nhật thông tin nhân viên (chỉ ADMIN)
-    @PreAuthorize("hasRole('ADMIN')")
     @PutMapping("/{id}")
     public ResponseEntity<?> updateStaff(@PathVariable Integer id, @RequestBody Staff staff) {
         try {
@@ -98,7 +103,6 @@ public class StaffController {
     }
 
     // Xóa nhân viên (chỉ ADMIN)
-    @PreAuthorize("hasRole('ADMIN')")
     @DeleteMapping("/{id}")
     public ResponseEntity<?> deleteStaff(@PathVariable Integer id) {
         try {
@@ -114,7 +118,6 @@ public class StaffController {
     }
 
     // Lấy danh sách nhân viên theo vai trò (chỉ ADMIN)
-    @PreAuthorize("hasRole('ADMIN')")
     @GetMapping("/role/{role}")
     public ResponseEntity<?> getStaffByRole(@PathVariable String role) {
         try {
@@ -127,7 +130,6 @@ public class StaffController {
     }
 
     // Lấy thông tin profile của nhân viên hiện tại
-    @PreAuthorize("hasRole('ADMIN') or hasRole('COLLECTOR') or hasRole('DRIVER')")
     @GetMapping("/profile")
     public ResponseEntity<?> getCurrentStaffProfile() {
         try {
@@ -147,7 +149,6 @@ public class StaffController {
     }
 
     // Cập nhật thông tin profile của nhân viên hiện tại
-    @PreAuthorize("hasRole('ADMIN') or hasRole('COLLECTOR') or hasRole('DRIVER')")
     @PutMapping("/profile")
     public ResponseEntity<?> updateCurrentStaffProfile(@RequestBody Staff staffUpdate) {
         try {

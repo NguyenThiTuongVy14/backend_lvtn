@@ -101,8 +101,6 @@ public interface StaffRepository extends JpaRepository<Staff, Integer> {
             nativeQuery = true)
     Optional<String> findAuthorityNameByUserNameNative(@Param("userName") String userName);
 
-    // ==== ADDITIONAL UTILITY METHODS ====
-
     // Lấy Staff theo status
     List<Staff> findByStatus(String status);
 

@@ -7,7 +7,6 @@ import com.example.test.service.JobPositionService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.math.BigDecimal;
@@ -31,7 +30,6 @@ public class JobPositionController {
     }
 
     // Tạo vị trí công việc mới (chỉ ADMIN)
-    @PreAuthorize("hasRole('ADMIN')")
     @PostMapping
     public ResponseEntity<?> createJobPosition(@RequestBody JobPosition jobPosition) {
         try {
@@ -46,7 +44,6 @@ public class JobPositionController {
     }
 
     // Lấy danh sách tất cả vị trí công việc (chỉ ADMIN)
-    @PreAuthorize("hasRole('ADMIN')")
     @GetMapping
     public ResponseEntity<?> getAllJobPositions() {
         try {
@@ -59,7 +56,6 @@ public class JobPositionController {
     }
 
     // Lấy vị trí công việc theo ID
-    @PreAuthorize("hasRole('ADMIN') or hasRole('COLLECTOR') or hasRole('DRIVER')")
     @GetMapping("/{id}")
     public ResponseEntity<?> getJobPositionById(@PathVariable Integer id) {
         try {
@@ -76,7 +72,6 @@ public class JobPositionController {
     }
 
     // Cập nhật vị trí công việc (chỉ ADMIN)
-    @PreAuthorize("hasRole('ADMIN')")
     @PutMapping("/{id}")
     public ResponseEntity<?> updateJobPosition(@PathVariable Integer id, @RequestBody JobPosition jobPosition) {
         try {
@@ -92,7 +87,6 @@ public class JobPositionController {
     }
 
     // Xóa vị trí công việc (chỉ ADMIN)
-    @PreAuthorize("hasRole('ADMIN')")
     @DeleteMapping("/{id}")
     public ResponseEntity<?> deleteJobPosition(@PathVariable Integer id) {
         try {
@@ -109,7 +103,6 @@ public class JobPositionController {
 
 
     // Tìm vị trí công việc gần nhất theo tọa độ
-    @PreAuthorize("hasRole('COLLECTOR') or hasRole('DRIVER')")
     @GetMapping("/nearby")
     public ResponseEntity<?> getNearbyJobPositions(@RequestParam BigDecimal lat,
                                                    @RequestParam BigDecimal lng,

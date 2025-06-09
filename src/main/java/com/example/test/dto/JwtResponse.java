@@ -1,5 +1,8 @@
 package com.example.test.dto;
 
+import lombok.Getter;
+
+@Getter
 public class JwtResponse {
     private final String token;
 
@@ -7,7 +10,4 @@ public class JwtResponse {
         this.token = token;
     }
 
-    public String getToken() {
-        return token;
-    }
 }

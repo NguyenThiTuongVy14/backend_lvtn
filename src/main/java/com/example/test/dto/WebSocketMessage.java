@@ -1,14 +1,10 @@
 package com.example.test.dto;
 
 import lombok.Data;
-import lombok.Getter;
-import lombok.Setter;
 
 import java.time.LocalDateTime;
 
 @Data
-@Getter
-@Setter
 public class WebSocketMessage {
     private String type; // POINT_STATUS, COLLECTOR_STATUS_CHANGED
     private Integer id;
