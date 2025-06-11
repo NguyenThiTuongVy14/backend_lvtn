@@ -44,7 +44,7 @@ public class JobRotationService {
     }
     @Scheduled(cron = "0 0 * * * *") // mỗi giờ đầu tiên: 0:00, 1:00, 2:00,...
     public void autoFailExpiredJobs() {
-        int affected = jobRotationRepository.updateStatusToFail();
+        int affected = jobRotationRepository.updateStatusByEndTime();
         System.out.println("Updated " + affected + " job rotations to FAIL status.");
     }
 }

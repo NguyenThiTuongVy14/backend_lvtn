@@ -28,10 +28,11 @@ public class JobRotation {
     @Column(name = "vehicle_id")
     private Integer vehicleId; // ID xe
 
-    private int shift_id; //Ca làm
+//    @Column(name = "shift_id")
+//    private int shiftId; //Ca làm
 
-    private Date rotation_date;
-
+//    @Column(name = "rotation_date")
+//    private Date rotationDate;
     private String role; //COLLECTOR, DRIVER
 
     private String status; //COMPLETED, PENDING, FAIL

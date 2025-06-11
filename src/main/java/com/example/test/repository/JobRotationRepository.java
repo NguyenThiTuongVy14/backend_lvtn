@@ -9,6 +9,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.util.Date;
 import java.util.List;
 
 @Repository
@@ -26,10 +27,25 @@ public interface JobRotationRepository extends JpaRepository<JobRotation, Intege
 
     @Modifying
     @Transactional
-    @Query(value = "UPDATE t_job_rotation SET status = 'FAIL' " +
-            "WHERE rotation_date < NOW() " +
-            "AND status IN ('PENDING')", nativeQuery = true)
-    int updateStatusToFail();
+    @Query(value = """
+    UPDATE t_job_rotation jr
+    JOIN t_shift s ON jr.shift_id = s.id
+    SET jr.status = CASE
+        WHEN TIMESTAMPDIFF(HOUR, CAST(s.end_time AS CHAR), jr.update_time) > 4
+             AND jr.update_time IS NOT NULL
+             AND jr.status IN ('PENDING', 'ASSIGNED')
+        THEN 'FAIL'
+        
+        WHEN jr.update_time > CAST(s.end_time AS CHAR)
+             AND TIMESTAMPDIFF(HOUR, CAST(s.end_time AS CHAR), jr.update_time) <= 4
+             AND jr.status IN ('PENDING', 'ASSIGNED')
+        THEN 'LATE'
+        
+        ELSE jr.status
+    END
+""", nativeQuery = true)
+    int updateStatusByEndTime();
+
 
 
     @Query(value = """
@@ -64,4 +80,7 @@ public interface JobRotationRepository extends JpaRepository<JobRotation, Intege
     List<JobRotationDetailDTO> findByUserName(@Param("userName") String userName);
 
 
+    List<JobRotation> findByStaffIdAndRoleAndRotationDate(Integer staffId, String role, Date rotationDate);
+
+    List<JobRotation> findByStaffIdAndRoleAndStatus(Integer staffId, String collector, String pending);
 }

@@ -66,7 +66,7 @@ public class SecurityConfig {
                         .requestMatchers("/ws/**").permitAll()
 
                         // Collection Points endpoints
-                        .requestMatchers("/api/collection-points/*/complete-collection")
+                        .requestMatchers("/api/collection-points/mark-completed")
                         .hasAnyAuthority("COLLECTOR", "ADMIN")
                         .requestMatchers("/api/collection-points/*/complete-driver-collection")
                         .hasAnyAuthority("DRIVER", "ADMIN")
