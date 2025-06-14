@@ -21,4 +21,6 @@ public class Vehicle {
 
     @Column(name = "status")
     private String status; // Trạng thái: AVAILABLE, IN_USE
+
+   private String image;
 }

@@ -58,24 +58,24 @@ public class CollectionPointController {
     /**
      * API lấy danh sách công việc của collector theo ngày
      */
-    @GetMapping("/collector-jobs/{staffId}")
-    public ResponseEntity<List<JobRotation>> getCollectorJobs(
-            @PathVariable Integer staffId,
-            @RequestParam(required = false) String date) {
-
-        try {
-            Date rotationDate = null;
-            if (date != null && !date.isEmpty()) {
-                rotationDate = java.sql.Date.valueOf(date); // Format: YYYY-MM-DD
-            }
-
-            List<JobRotation> jobs = collectionPointService.getCollectorJobs(staffId, rotationDate);
-            return ResponseEntity.ok(jobs);
-
-        } catch (Exception e) {
-            return ResponseEntity.badRequest().build();
-        }
-    }
+//    @GetMapping("/collector-jobs/{staffId}")
+//    public ResponseEntity<List<JobRotation>> getCollectorJobs(
+//            @PathVariable Integer staffId,
+//            @RequestParam(required = false) String date) {
+//
+//        try {
+//            Date rotationDate = null;
+//            if (date != null && !date.isEmpty()) {
+//                rotationDate = java.sql.Date.valueOf(date); // Format: YYYY-MM-DD
+//            }
+//
+//            List<JobRotation> jobs = collectionPointService.getCollectorJobs(staffId, rotationDate);
+//            return ResponseEntity.ok(jobs);
+//
+//        } catch (Exception e) {
+//            return ResponseEntity.badRequest().build();
+//        }
+//    }
     /**
      * API lấy danh sách công việc đang pending của collector
      */
@@ -86,39 +86,39 @@ public class CollectionPointController {
         return ResponseEntity.ok(pendingJobs);
     }
 
-//    @PostMapping("/driver/mark-completed")
-//    public ResponseEntity<DriverMarkCompletionResponse> driverMarkCompleted(
-//            @RequestBody DriverMarkCompletionRequest request) {
-//
-//        // Validation
-//        if (request.getJobRotationId() == null) {
-//            DriverMarkCompletionResponse errorResponse = new DriverMarkCompletionResponse();
-//            errorResponse.setSuccess(false);
-//            errorResponse.setMessage("Job rotation ID không được để trống");
-//            return ResponseEntity.badRequest().body(errorResponse);
-//        }
-//
-//        if (request.getJobPositionId() == null) {
-//            DriverMarkCompletionResponse errorResponse = new DriverMarkCompletionResponse();
-//            errorResponse.setSuccess(false);
-//            errorResponse.setMessage("Job position ID không được để trống");
-//            return ResponseEntity.badRequest().body(errorResponse);
-//        }
-//
-//        if (request.getShiftId() == null) {
-//            DriverMarkCompletionResponse errorResponse = new DriverMarkCompletionResponse();
-//            errorResponse.setSuccess(false);
-//            errorResponse.setMessage("Shift ID không được để trống");
-//            return ResponseEntity.badRequest().body(errorResponse);
-//        }
-//
-//        DriverMarkCompletionResponse response = collectionPointService.driverMarkCompleted(request);
-//
-//        if (response.isSuccess()) {
-//            return ResponseEntity.ok(response);
-//        } else {
-//            return ResponseEntity.badRequest().body(response);
-//        }
-//    }
+    @PostMapping("/driver/mark-completed")
+    public ResponseEntity<DriverMarkCompletionResponse> driverMarkCompleted(
+            @RequestBody DriverMarkCompletionRequest request) {
+
+        // Validation
+        if (request.getJobRotationId() == null) {
+            DriverMarkCompletionResponse errorResponse = new DriverMarkCompletionResponse();
+            errorResponse.setSuccess(false);
+            errorResponse.setMessage("Job rotation ID không được để trống");
+            return ResponseEntity.badRequest().body(errorResponse);
+        }
+
+        if (request.getJobPositionId() == null) {
+            DriverMarkCompletionResponse errorResponse = new DriverMarkCompletionResponse();
+            errorResponse.setSuccess(false);
+            errorResponse.setMessage("Job position ID không được để trống");
+            return ResponseEntity.badRequest().body(errorResponse);
+        }
+
+        if (request.getShiftId() == null) {
+            DriverMarkCompletionResponse errorResponse = new DriverMarkCompletionResponse();
+            errorResponse.setSuccess(false);
+            errorResponse.setMessage("Shift ID không được để trống");
+            return ResponseEntity.badRequest().body(errorResponse);
+        }
+
+        DriverMarkCompletionResponse response = collectionPointService.driverMarkCompleted(request);
+
+        if (response.isSuccess()) {
+            return ResponseEntity.ok(response);
+        } else {
+            return ResponseEntity.badRequest().body(response);
+        }
+    }
 
 }
