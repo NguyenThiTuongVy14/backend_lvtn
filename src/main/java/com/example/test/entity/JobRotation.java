@@ -1,8 +1,9 @@
 package com.example.test.entity;
 
 import jakarta.persistence.*;
-import lombok.Data;;
+import lombok.Data;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 @Entity
@@ -26,11 +27,8 @@ public class JobRotation {
 
     private String status; //COMPLETED, PENDING, FAIL
 
-    @Column(name = "start_date")
-    private LocalDateTime startDate;
-
-    @Column(name = "end_date")
-    private LocalDateTime endDate;
+   @Column(name = "rotation_date")
+   private LocalDate rotationDate;
 
     @Column(name = "created_by")
     private Integer createdBy; // ID admin tạo lịch phân công
@@ -40,4 +38,7 @@ public class JobRotation {
 
     @Column(name = "updated_at")
     private LocalDateTime updatedAt; // Thời gian cập nhật
+
+    @Column(name = "shift_id")
+    private Integer shiftId;
 }

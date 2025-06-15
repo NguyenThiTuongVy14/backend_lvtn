@@ -40,11 +40,12 @@ public class JobRotationService {
         this.vehicleRepository = vehicleRepository;
     }
     public List<JobRotationDetailDTO> getMyJobRotations(String userName) {
+        System.out.println(jobRotationRepository.findByUserName(userName));
         return jobRotationRepository.findByUserName(userName);
     }
     @Scheduled(cron = "0 0 * * * *") // mỗi giờ đầu tiên: 0:00, 1:00, 2:00,...
     public void autoFailExpiredJobs() {
-        int affected = jobRotationRepository.updateStatusByEndTime();
+        int affected = jobRotationRepository.updateStatusByRotationTime();
         System.out.println("Updated " + affected + " job rotations to FAIL status.");
     }
 }

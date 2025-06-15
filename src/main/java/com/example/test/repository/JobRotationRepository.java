@@ -9,12 +9,12 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
-import java.time.LocalDateTime;
-import java.util.Date;
+import java.time.LocalDate;
 import java.util.List;
 
 @Repository
 public interface JobRotationRepository extends JpaRepository<JobRotation, Integer> {
+
     // Tìm lịch phân công theo ID nhân viên
     List<JobRotation> findByStaffId(Integer staffId);
 
@@ -25,29 +25,31 @@ public interface JobRotationRepository extends JpaRepository<JobRotation, Intege
             "GROUP BY jp.name", nativeQuery = true)
     List<Object[]> getRotationStatistics();
 
+    // Cập nhật trạng thái dựa trên thời gian ca làm việc
     @Modifying
     @Transactional
     @Query(value = """
     UPDATE t_job_rotation jr
+    JOIN t_shift s ON jr.shift_id = s.id
     SET jr.status = CASE
-        WHEN TIMESTAMPDIFF(HOUR, jr.end_date, jr.updated_at) > 1
-             AND jr.updated_at IS NOT NULL
+        WHEN jr.rotation_date < CURDATE()
              AND jr.status IN ('PENDING', 'ASSIGNED')
         THEN 'FAIL'
                  
-        WHEN jr.updated_at > jr.end_date
-             AND TIMESTAMPDIFF(HOUR, jr.end_date, jr.updated_at) <= 1
+        WHEN jr.rotation_date = CURDATE()
+             AND CURTIME() > ADDTIME(s.end_time, '01:00:00')
              AND jr.status IN ('PENDING', 'ASSIGNED')
         THEN 'LATE'
                  
         ELSE jr.status
     END """, nativeQuery = true)
-    int updateStatusByEndTime();
+    int updateStatusByRotationTime();
 
     @Query(value = """
     SELECT 
         jr.id,
         jr.status,
+        jr.rotation_date,
         jr.created_at,
         jr.updated_at,
         
@@ -65,10 +67,16 @@ public interface JobRotationRepository extends JpaRepository<JobRotation, Intege
         jp.address,
         
         s.phone,
-        s.email
+        s.email,
+        
+        sh.id AS shift_id,
+        sh.name AS shift_name,
+        sh.start_time,
+        sh.end_time
     FROM t_job_rotation jr
     JOIN t_user s ON jr.staff_id = s.id
     JOIN t_job_position jp ON jr.position_id = jp.id
+    JOIN t_shift sh ON jr.shift_id = sh.id
     LEFT JOIN t_vehicle v ON jr.vehicle_id = v.id
     WHERE s.user_name = :userName """, nativeQuery = true)
     List<JobRotationDetailDTO> findByUserName(@Param("userName") String userName);
@@ -87,20 +95,15 @@ public interface JobRotationRepository extends JpaRepository<JobRotation, Intege
     SELECT jr.* FROM t_job_rotation jr
     WHERE jr.staff_id = :staffId 
     AND jr.role = 'COLLECTOR'
-    AND DATE(jr.start_date) = DATE(:workDate)
-    ORDER BY jr.start_date ASC
+    AND jr.rotation_date = :rotationDate
+    ORDER BY jr.created_at ASC
     """, nativeQuery = true)
     List<JobRotation> findCollectorJobsByDate(@Param("staffId") Integer staffId,
-                                              @Param("workDate") Date workDate);
+                                              @Param("rotationDate") LocalDate rotationDate);
 
     // ===========================================
     // DRIVER-SPECIFIC METHODS
     // ===========================================
-
-    /**
-     * Lấy danh sách công việc đang pending của tài xế
-     */
-    List<JobRotation> findByStaffIdAndRoleAndStatusOrderByStartDateAsc(Integer staffId, String role, String status);
 
     /**
      * Lấy danh sách công việc của tài xế theo ngày
@@ -109,11 +112,11 @@ public interface JobRotationRepository extends JpaRepository<JobRotation, Intege
     SELECT jr.* FROM t_job_rotation jr
     WHERE jr.staff_id = :staffId 
     AND jr.role = 'DRIVER'
-    AND DATE(jr.start_date) = DATE(:workDate)
-    ORDER BY jr.start_date ASC
+    AND jr.rotation_date = :rotationDate
+    ORDER BY jr.created_at ASC
     """, nativeQuery = true)
     List<JobRotation> findDriverJobsByDate(@Param("staffId") Integer staffId,
-                                           @Param("workDate") Date workDate);
+                                           @Param("rotationDate") LocalDate rotationDate);
 
     /**
      * Lấy chi tiết công việc tài xế với thông tin đầy đủ
@@ -123,8 +126,7 @@ public interface JobRotationRepository extends JpaRepository<JobRotation, Intege
         jr.id as job_rotation_id,
         jr.status,
         jr.role,
-        jr.start_date,
-        jr.end_date,
+        jr.rotation_date,
         jr.created_at,
         jr.updated_at,
         
@@ -139,17 +141,23 @@ public interface JobRotationRepository extends JpaRepository<JobRotation, Intege
         
         v.id as vehicle_id,
         v.license_plate,
-        v.capacity
+        v.capacity,
+        
+        sh.id as shift_id,
+        sh.name as shift_name,
+        sh.start_time,
+        sh.end_time
         
     FROM t_job_rotation jr
     JOIN t_user s ON jr.staff_id = s.id
     JOIN t_job_position jp ON jr.position_id = jp.id
+    JOIN t_shift sh ON jr.shift_id = sh.id
     LEFT JOIN t_vehicle v ON jr.vehicle_id = v.id
     
     WHERE jr.staff_id = :staffId 
     AND jr.role = 'DRIVER'
     AND jr.status = :status
-    ORDER BY jr.start_date ASC
+    ORDER BY jr.rotation_date ASC, sh.start_time ASC
     """, nativeQuery = true)
     List<Object[]> findDriverJobsWithDetails(@Param("staffId") Integer staffId,
                                              @Param("status") String status);
@@ -162,8 +170,7 @@ public interface JobRotationRepository extends JpaRepository<JobRotation, Intege
         jr.id as job_rotation_id,
         jr.status,
         jr.role,
-        jr.start_date,
-        jr.end_date,
+        jr.rotation_date,
         jr.created_at,
         jr.updated_at,
         
@@ -178,17 +185,23 @@ public interface JobRotationRepository extends JpaRepository<JobRotation, Intege
         
         v.id as vehicle_id,
         v.license_plate,
-        v.capacity
+        v.capacity,
+        
+        sh.id as shift_id,
+        sh.name as shift_name,
+        sh.start_time,
+        sh.end_time
         
     FROM t_job_rotation jr
     JOIN t_user s ON jr.staff_id = s.id
     JOIN t_job_position jp ON jr.position_id = jp.id
+    JOIN t_shift sh ON jr.shift_id = sh.id
     LEFT JOIN t_vehicle v ON jr.vehicle_id = v.id
     
     WHERE jr.staff_id = :staffId 
     AND jr.role = 'COLLECTOR'
     AND jr.status = :status
-    ORDER BY jr.start_date ASC
+    ORDER BY jr.rotation_date ASC, sh.start_time ASC
     """, nativeQuery = true)
     List<Object[]> findCollectorJobsWithDetails(@Param("staffId") Integer staffId,
                                                 @Param("status") String status);
@@ -200,7 +213,7 @@ public interface JobRotationRepository extends JpaRepository<JobRotation, Intege
     SELECT jr.* FROM t_job_rotation jr
     WHERE jr.staff_id = :staffId 
     AND jr.role = 'DRIVER'
-    ORDER BY jr.start_date ASC, jr.created_at ASC
+    ORDER BY jr.rotation_date ASC, jr.created_at ASC
     """, nativeQuery = true)
     List<JobRotation> findAllDriverJobs(@Param("staffId") Integer staffId);
 
@@ -211,7 +224,7 @@ public interface JobRotationRepository extends JpaRepository<JobRotation, Intege
     SELECT jr.* FROM t_job_rotation jr
     WHERE jr.staff_id = :staffId 
     AND jr.role = 'COLLECTOR'
-    ORDER BY jr.start_date ASC, jr.created_at ASC
+    ORDER BY jr.rotation_date ASC, jr.created_at ASC
     """, nativeQuery = true)
     List<JobRotation> findAllCollectorJobs(@Param("staffId") Integer staffId);
 
@@ -233,55 +246,73 @@ public interface JobRotationRepository extends JpaRepository<JobRotation, Intege
     SELECT jr.* FROM t_job_rotation jr
     WHERE jr.staff_id = :staffId 
     AND jr.role = :role
-    AND DATE(jr.start_date) BETWEEN DATE(:startDate) AND DATE(:endDate)
-    ORDER BY jr.start_date ASC
+    AND jr.rotation_date BETWEEN :startDate AND :endDate
+    ORDER BY jr.rotation_date ASC
     """, nativeQuery = true)
     List<JobRotation> findJobsByDateRange(@Param("staffId") Integer staffId,
                                           @Param("role") String role,
-                                          @Param("startDate") Date startDate,
-                                          @Param("endDate") Date endDate);
+                                          @Param("startDate") LocalDate startDate,
+                                          @Param("endDate") LocalDate endDate);
 
     /**
-     * Lấy công việc đang diễn ra (trong khoảng thời gian start_date và end_date)
+     * Lấy công việc hôm nay theo ca làm việc
      */
     @Query(value = """
     SELECT jr.* FROM t_job_rotation jr
+    JOIN t_shift s ON jr.shift_id = s.id
     WHERE jr.staff_id = :staffId 
     AND jr.role = :role
-    AND NOW() BETWEEN jr.start_date AND jr.end_date
+    AND jr.rotation_date = CURDATE()
     AND jr.status IN ('PENDING', 'IN_PROGRESS')
-    ORDER BY jr.start_date ASC
+    ORDER BY s.start_time ASC
     """, nativeQuery = true)
-    List<JobRotation> findActiveJobs(@Param("staffId") Integer staffId,
-                                     @Param("role") String role);
+    List<JobRotation> findTodayJobs(@Param("staffId") Integer staffId,
+                                    @Param("role") String role);
 
     /**
-     * Lấy công việc sắp tới (start_date > hiện tại)
+     * Lấy công việc sắp tới (rotation_date > hiện tại)
      */
     @Query(value = """
     SELECT jr.* FROM t_job_rotation jr
+    JOIN t_shift s ON jr.shift_id = s.id
     WHERE jr.staff_id = :staffId 
     AND jr.role = :role
-    AND jr.start_date > NOW()
+    AND jr.rotation_date > CURDATE()
     AND jr.status = 'PENDING'
-    ORDER BY jr.start_date ASC
+    ORDER BY jr.rotation_date ASC, s.start_time ASC
     """, nativeQuery = true)
     List<JobRotation> findUpcomingJobs(@Param("staffId") Integer staffId,
                                        @Param("role") String role);
 
     /**
-     * Lấy công việc đã quá hạn (end_date < hiện tại và chưa hoàn thành)
+     * Lấy công việc đã quá hạn (rotation_date < hiện tại và chưa hoàn thành)
      */
     @Query(value = """
     SELECT jr.* FROM t_job_rotation jr
     WHERE jr.staff_id = :staffId 
     AND jr.role = :role
-    AND jr.end_date < NOW()
+    AND jr.rotation_date < CURDATE()
     AND jr.status NOT IN ('COMPLETED', 'FAIL')
-    ORDER BY jr.end_date ASC
+    ORDER BY jr.rotation_date ASC
     """, nativeQuery = true)
     List<JobRotation> findOverdueJobs(@Param("staffId") Integer staffId,
                                       @Param("role") String role);
+
+    /**
+     * Lấy công việc trong ca hiện tại
+     */
+    @Query(value = """
+    SELECT jr.* FROM t_job_rotation jr
+    JOIN t_shift s ON jr.shift_id = s.id
+    WHERE jr.staff_id = :staffId 
+    AND jr.role = :role
+    AND jr.rotation_date = CURDATE()
+    AND CURTIME() BETWEEN s.start_time AND s.end_time
+    AND jr.status IN ('PENDING', 'IN_PROGRESS')
+    ORDER BY s.start_time ASC
+    """, nativeQuery = true)
+    List<JobRotation> findCurrentShiftJobs(@Param("staffId") Integer staffId,
+                                           @Param("role") String role);
 
     /**
      * Cập nhật trạng thái công việc
@@ -302,9 +333,34 @@ public interface JobRotationRepository extends JpaRepository<JobRotation, Intege
     @Query(value = """
     SELECT jr.* FROM t_job_rotation jr
     WHERE jr.position_id = :positionId 
-    AND DATE(jr.start_date) = DATE(:workDate)
-    ORDER BY jr.start_date ASC
+    AND jr.rotation_date = :rotationDate
+    ORDER BY jr.created_at ASC
     """, nativeQuery = true)
     List<JobRotation> findJobsByPositionAndDate(@Param("positionId") Integer positionId,
-                                                @Param("workDate") Date workDate);
+                                                @Param("rotationDate") LocalDate rotationDate);
+
+    /**
+     * Lấy công việc theo ca làm việc
+     */
+    @Query(value = """
+    SELECT jr.* FROM t_job_rotation jr
+    WHERE jr.shift_id = :shiftId
+    AND jr.rotation_date = :rotationDate
+    ORDER BY jr.created_at ASC
+    """, nativeQuery = true)
+    List<JobRotation> findJobsByShiftAndDate(@Param("shiftId") Integer shiftId,
+                                             @Param("rotationDate") LocalDate rotationDate);
+
+    /**
+     * Lấy công việc theo nhân viên và ca làm việc
+     */
+    @Query(value = """
+    SELECT jr.* FROM t_job_rotation jr
+    WHERE jr.staff_id = :staffId
+    AND jr.shift_id = :shiftId
+    AND jr.rotation_date = :rotationDate
+    """, nativeQuery = true)
+    List<JobRotation> findJobsByStaffAndShiftAndDate(@Param("staffId") Integer staffId,
+                                                     @Param("shiftId") Integer shiftId,
+                                                     @Param("rotationDate") LocalDate rotationDate);
 }
