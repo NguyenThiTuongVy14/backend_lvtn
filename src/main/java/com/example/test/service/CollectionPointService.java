@@ -112,7 +112,7 @@ public class CollectionPointService {
             statusUpdate.put("updatedAt", jobRotation.getUpdatedAt());
 
             // Gửi update đến các app khác
-            System.out.println("Sending to WebSocket: " + statusUpdate);
+            System.out.println("Sending to WebSockettttt: " + statusUpdate);
             messagingTemplate.convertAndSend("/topic/job-status", statusUpdate);
 
         } catch (Exception e) {
