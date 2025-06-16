@@ -26,3 +26,7 @@ jobs:
         run: |
           docker build -t meo14/backend-springboot:latest .
           docker push meo14/backend-springboot:latest
+
+      - name: Trigger Deploy on Render
+        run: |
+          curl -X POST ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
