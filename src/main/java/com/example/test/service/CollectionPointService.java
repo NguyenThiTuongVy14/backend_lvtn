@@ -113,7 +113,7 @@ public class CollectionPointService {
 
             // Gửi update đến các app khác
             System.out.println("Sending to WebSocket: " + statusUpdate);
-            messagingTemplate.convertAndSend("/topic/job-status", statusUpdate);
+            messagingTemplate.convertAndSend("/topic/job-status-"+jobRotation.getJobPositionId(), statusUpdate);
 
         } catch (Exception e) {
             // Log error nhưng không ảnh hưởng đến business logic

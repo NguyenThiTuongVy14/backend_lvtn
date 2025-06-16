@@ -15,6 +15,7 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -39,13 +40,18 @@ public class JobRotationService {
         this.jobPositionRepository = jobPositionRepository;
         this.vehicleRepository = vehicleRepository;
     }
-    public List<JobRotationDetailDTO> getMyJobRotations(String userName) {
-        System.out.println(jobRotationRepository.findByUserName(userName));
-        return jobRotationRepository.findByUserName(userName);
+    public List<JobRotationDetailDTO> getMyJobRotationsByDate(String userName, LocalDate date) {
+        System.out.println("Getting rotations for user: " + userName + " on date: " + date);
+        return jobRotationRepository.findByUserNameAndDate(userName, date);
     }
     @Scheduled(cron = "0 0 * * * *") // mỗi giờ đầu tiên: 0:00, 1:00, 2:00,...
     public void autoFailExpiredJobs() {
-        int affected = jobRotationRepository.updateStatusByRotationTime();
-        System.out.println("Updated " + affected + " job rotations to FAIL status.");
+        int affected = jobRotationRepository.updateLateJobRotations();
+        System.out.println("Updated " + affected + " job rotations to LATE status.");
+    }
+
+    public List<JobRotationDetailDTO> getMyJobRotationsByDateRange(String userName, LocalDate startDate, LocalDate endDate) {
+        System.out.println("Getting rotations for user: " + userName + " from: " + startDate + " to: " + endDate);
+        return jobRotationRepository.findByUserNameAndDateRange(userName, startDate, endDate);
     }
 }

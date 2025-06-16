@@ -7,11 +7,13 @@ import com.example.test.repository.JobRotationRepository;
 import com.example.test.repository.StaffRepository;
 import com.example.test.service.JobRotationService;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 
@@ -104,10 +106,28 @@ public class JobRotationController {
     }
 
     @GetMapping("/me")
-    public ResponseEntity<List<JobRotationDetailDTO>> getMyRotations() {
+    public ResponseEntity<List<JobRotationDetailDTO>> getMyRotations(
+            @RequestParam(value = "date", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
         String username = SecurityContextHolder.getContext().getAuthentication().getName();
         System.out.println("Logged in username: " + username);
-        List<JobRotationDetailDTO> rotations = jobRotationService.getMyJobRotations(username);
+
+        List<JobRotationDetailDTO> rotations;
+        if (date != null) {
+            rotations = jobRotationService.getMyJobRotationsByDate(username, date);
+        } else {
+            rotations = jobRotationService.getMyJobRotationsByDate(username, LocalDate.now());
+        }
+
+        return ResponseEntity.ok(rotations);
+    }
+    @GetMapping("/me/range")
+    public ResponseEntity<List<JobRotationDetailDTO>> getMyRotationsByRange(
+            @RequestParam("startDate") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
+            @RequestParam("endDate") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate) {
+        String username = SecurityContextHolder.getContext().getAuthentication().getName();
+        System.out.println("Logged in username: " + username);
+
+        List<JobRotationDetailDTO> rotations = jobRotationService.getMyJobRotationsByDateRange(username, startDate, endDate);
         return ResponseEntity.ok(rotations);
     }
     // Lớp hỗ trợ định dạng phản hồi

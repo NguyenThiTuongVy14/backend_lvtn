@@ -31,19 +31,17 @@ public interface JobRotationRepository extends JpaRepository<JobRotation, Intege
     @Query(value = """
     UPDATE t_job_rotation jr
     JOIN t_shift s ON jr.shift_id = s.id
-    SET jr.status = CASE
-        WHEN jr.rotation_date < CURDATE()
-             AND jr.status IN ('PENDING', 'ASSIGNED')
-        THEN 'FAIL'
-                 
-        WHEN jr.rotation_date = CURDATE()
-             AND CURTIME() > ADDTIME(s.end_time, '01:00:00')
-             AND jr.status IN ('PENDING', 'ASSIGNED')
-        THEN 'LATE'
-                 
-        ELSE jr.status
-    END """, nativeQuery = true)
-    int updateStatusByRotationTime();
+    SET jr.status = 'LATE'
+    WHERE jr.status = 'ASSIGNED' 
+      AND (
+        -- Trường hợp 1: Ngày rotation đã qua
+        jr.rotation_date < CURDATE()
+        OR 
+        -- Trường hợp 2: Kết hợp ngày + giờ để so sánh chính xác
+        TIMESTAMP(jr.rotation_date, ADDTIME(s.end_time, '01:00:00')) < NOW()
+      )
+    """, nativeQuery = true)
+    int updateLateJobRotations();
 
     @Query(value = """
     SELECT 
@@ -78,9 +76,50 @@ public interface JobRotationRepository extends JpaRepository<JobRotation, Intege
     JOIN t_job_position jp ON jr.position_id = jp.id
     JOIN t_shift sh ON jr.shift_id = sh.id
     LEFT JOIN t_vehicle v ON jr.vehicle_id = v.id
-    WHERE s.user_name = :userName """, nativeQuery = true)
-    List<JobRotationDetailDTO> findByUserName(@Param("userName") String userName);
-
+    WHERE s.user_name = :userName
+    AND DATE(jr.rotation_date) = DATE(:rotationDate)
+        """, nativeQuery = true)
+    List<JobRotationDetailDTO> findByUserNameAndDate(@Param("userName") String userName,
+                                                     @Param("rotationDate") LocalDate rotationDate);
+    @Query(value = """
+    SELECT 
+        jr.id,
+        jr.status,
+        jr.rotation_date,
+        jr.created_at,
+        jr.updated_at,
+        
+        s.id AS staff_id,
+        s.full_name AS staff_name,
+        
+        jp.id AS position_id,
+        jp.name AS job_position_name,
+        
+        v.id AS vehicle_id,
+        v.license_plate,
+        
+        jp.lat,
+        jp.lng,
+        jp.address,
+        
+        s.phone,
+        s.email,
+        
+        sh.id AS shift_id,
+        sh.name AS shift_name,
+        sh.start_time,
+        sh.end_time
+    FROM t_job_rotation jr
+    JOIN t_user s ON jr.staff_id = s.id
+    JOIN t_job_position jp ON jr.position_id = jp.id
+    JOIN t_shift sh ON jr.shift_id = sh.id
+    LEFT JOIN t_vehicle v ON jr.vehicle_id = v.id
+    WHERE s.user_name = :userName 
+    AND jr.rotation_date BETWEEN :startDate AND :endDate
+    """, nativeQuery = true)
+        List<JobRotationDetailDTO> findByUserNameAndDateRange(@Param("userName") String userName,
+                                                              @Param("startDate") LocalDate startDate,
+                                                              @Param("endDate") LocalDate endDate);
     // Existing collector methods
     List<JobRotation> findByStaffIdAndRoleAndStatus(Integer staffId, String role, String status);
 
