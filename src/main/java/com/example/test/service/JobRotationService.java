@@ -20,6 +20,7 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.TimeZone;
 import java.util.stream.Collectors;
 
 @Service
@@ -44,14 +45,18 @@ public class JobRotationService {
         System.out.println("Getting rotations for user: " + userName + " on date: " + date);
         return jobRotationRepository.findByUserNameAndDate(userName, date);
     }
+    /**
+     * Lấy danh sách công việc của driver với thông tin collector status theo ngày
+     */
+    public List<DriverJobWithCollectorStatusDTO> getDriverJobsWithCollectorStatusByDate(
+            String username, LocalDate date) {
+
+        return jobRotationRepository.findDriverJobsWithCollectorStatusByDate(username, date);
+    }
     @Scheduled(cron = "0 0 * * * *") // mỗi giờ đầu tiên: 0:00, 1:00, 2:00,...
     public void autoFailExpiredJobs() {
         int affected = jobRotationRepository.updateLateJobRotations();
         System.out.println("Updated " + affected + " job rotations to LATE status.");
     }
 
-    public List<JobRotationDetailDTO> getMyJobRotationsByDateRange(String userName, LocalDate startDate, LocalDate endDate) {
-        System.out.println("Getting rotations for user: " + userName + " from: " + startDate + " to: " + endDate);
-        return jobRotationRepository.findByUserNameAndDateRange(userName, startDate, endDate);
-    }
 }

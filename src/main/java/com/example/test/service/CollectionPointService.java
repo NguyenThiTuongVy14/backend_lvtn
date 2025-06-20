@@ -3,7 +3,9 @@ package com.example.test.service;
 import com.example.test.dto.MarkCompletionRequest;
 import com.example.test.dto.MarkCompletionResponse;
 import com.example.test.entity.JobRotation;
+import com.example.test.entity.RotationStoreId;
 import com.example.test.repository.JobRotationRepository;
+import com.example.test.repository.RotationStoreIdRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
@@ -19,12 +21,14 @@ public class CollectionPointService {
 
     private final JobRotationRepository jobRotationRepository;
     private final SimpMessagingTemplate messagingTemplate;
+    private final RotationStoreIdRepository rotationStoreIdRepository;
 
     @Autowired
     public CollectionPointService(JobRotationRepository jobRotationRepository,
-                                  SimpMessagingTemplate messagingTemplate) {
+                                  SimpMessagingTemplate messagingTemplate,RotationStoreIdRepository rotationStoreIdRepository) {
         this.jobRotationRepository = jobRotationRepository;
         this.messagingTemplate = messagingTemplate;
+        this.rotationStoreIdRepository=rotationStoreIdRepository;
     }
 
     /**
@@ -80,6 +84,10 @@ public class CollectionPointService {
             // Lưu vào database
             JobRotation savedJobRotation = jobRotationRepository.save(jobRotation);
 
+            if ("COLLECTOR".equals(expectedRole)) {
+                updateRotationStoreCompletion(savedJobRotation);
+            }
+
             // Gửi socket update
             updateJobStatus(savedJobRotation);
 
@@ -96,6 +104,32 @@ public class CollectionPointService {
         }
 
         return response;
+    }
+    /**
+     * Cập nhật trạng thái hoàn thành trong bảng t_rotation_storeId khi collector hoàn thành
+     */
+    private void updateRotationStoreCompletion(JobRotation jobRotation) {
+        try {
+            // Tìm và cập nhật tất cả các record có rotation_id_collector
+            List<RotationStoreId> rotationStores = rotationStoreIdRepository
+                    .findByRotationIdCollector(jobRotation.getId());
+
+            for (RotationStoreId rotationStore : rotationStores) {
+                rotationStore.setIsCompleted(true);
+                rotationStore.setUpdatedAt(LocalDateTime.now());
+            }
+
+            // Lưu tất cả thay đổi
+            rotationStoreIdRepository.saveAll(rotationStores);
+
+            // Log để theo dõi
+            System.out.println("Updated " + rotationStores.size() +
+                    " rotation stores as completed for collector job: " + jobRotation.getId());
+
+        } catch (Exception e) {
+            System.err.println("Error updating rotation store completion: " + e.getMessage());
+            // Có thể throw exception hoặc log error tùy vào business logic
+        }
     }
 
     /**

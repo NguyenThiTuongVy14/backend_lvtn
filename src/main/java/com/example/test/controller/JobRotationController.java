@@ -1,5 +1,6 @@
 package com.example.test.controller;
 
+import com.example.test.dto.DriverJobWithCollectorStatusDTO;
 import com.example.test.dto.JobRotationDetailDTO;
 import com.example.test.entity.JobRotation;
 import com.example.test.entity.Staff;
@@ -16,6 +17,7 @@ import org.springframework.web.bind.annotation.*;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
+import java.util.TimeZone;
 
 @RestController
 @RequestMapping("/api/job-rotations")
@@ -120,17 +122,23 @@ public class JobRotationController {
 
         return ResponseEntity.ok(rotations);
     }
-    @GetMapping("/me/range")
-    public ResponseEntity<List<JobRotationDetailDTO>> getMyRotationsByRange(
-            @RequestParam("startDate") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
-            @RequestParam("endDate") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate) {
-        String username = SecurityContextHolder.getContext().getAuthentication().getName();
-        System.out.println("Logged in username: " + username);
+    @GetMapping("/driver")
+    public ResponseEntity<List<DriverJobWithCollectorStatusDTO>> getDriverJobs(
+            @RequestParam(value = "date", required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
 
-        List<JobRotationDetailDTO> rotations = jobRotationService.getMyJobRotationsByDateRange(username, startDate, endDate);
-        return ResponseEntity.ok(rotations);
+        String username = SecurityContextHolder.getContext().getAuthentication().getName();
+        System.out.println("Driver logged in username: " + username);
+
+        List<DriverJobWithCollectorStatusDTO> jobs;
+        if (date != null) {
+            jobs = jobRotationService.getDriverJobsWithCollectorStatusByDate(username, date);
+        } else {
+            jobs = jobRotationService.getDriverJobsWithCollectorStatusByDate(username, LocalDate.now());
+        }
+
+        return ResponseEntity.ok(jobs);
     }
-    // Lớp hỗ trợ định dạng phản hồi
     private record ResponseMessage(String message, Object data) {
         ResponseMessage(String message) {
             this(message, null);
