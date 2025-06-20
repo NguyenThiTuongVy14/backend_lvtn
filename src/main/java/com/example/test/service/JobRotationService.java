@@ -50,8 +50,10 @@ public class JobRotationService {
      */
     public List<DriverJobWithCollectorStatusDTO> getDriverJobsWithCollectorStatusByDate(
             String username, LocalDate date) {
-
-        return jobRotationRepository.findDriverJobsWithCollectorStatusByDate(username, date);
+        List<Object[]> rows = jobRotationRepository.findDriverJobsWithCollectorStatusByDate(username, date);
+        return rows.stream()
+                .map(DriverJobWithCollectorStatusDTO::new)
+                .collect(Collectors.toList());
     }
     @Scheduled(cron = "0 0 * * * *") // mỗi giờ đầu tiên: 0:00, 1:00, 2:00,...
     public void autoFailExpiredJobs() {

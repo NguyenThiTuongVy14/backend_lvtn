@@ -2,6 +2,7 @@ package com.example.test.dto;
 
 import lombok.Data;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
@@ -23,8 +24,8 @@ public class DriverJobWithCollectorStatusDTO {
     // Thông tin vị trí công việc
     private Integer positionId;
     private String jobPositionName;
-    private Double lat;
-    private Double lng;
+    private BigDecimal lat;
+    private BigDecimal lng;
     private String address;
 
     // Thông tin xe
@@ -57,8 +58,8 @@ public class DriverJobWithCollectorStatusDTO {
         this.vehicleId = (Integer) result[9];
         this.licensePlate = (String) result[10];
 
-        this.lat = (Double) result[11];
-        this.lng = (Double) result[12];
+        this.lat = (BigDecimal) result[11];
+        this.lng = (BigDecimal) result[12];
         this.address = (String) result[13];
 
         this.phone = (String) result[14];

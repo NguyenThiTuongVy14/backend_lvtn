@@ -161,8 +161,11 @@ public interface JobRotationRepository extends JpaRepository<JobRotation, Intege
         
         ORDER BY jr.created_at DESC
         """, nativeQuery = true)
-    List<DriverJobWithCollectorStatusDTO> findDriverJobsWithCollectorStatusByDate(
+    List<Object[]> findDriverJobsWithCollectorStatusByDate(
             @Param("userName") String userName,
             @Param("rotationDate") LocalDate rotationDate);
+//    List<Object[]> findDriverJobsWithCollectorStatusByDate(
+//            @Param("userName") String userName,
+//            @Param("rotationDate") LocalDate rotationDate);
 
 }
