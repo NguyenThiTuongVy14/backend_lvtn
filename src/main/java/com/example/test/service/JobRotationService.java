@@ -1,26 +1,21 @@
 package com.example.test.service;
 
 import com.example.test.dto.*;
-import com.example.test.entity.JobPosition;
-import com.example.test.entity.JobRotation;
-import com.example.test.entity.Staff;
-import com.example.test.entity.Vehicle;
+import com.example.test.entity.*;
 import com.example.test.repository.JobPositionRepository;
 import com.example.test.repository.JobRotationRepository;
 import com.example.test.repository.StaffRepository;
 import com.example.test.repository.VehicleRepository;
 import jakarta.transaction.Transactional;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.ResponseEntity;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Optional;
-import java.util.TimeZone;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @Service
@@ -57,6 +52,78 @@ public class JobRotationService {
     public void autoFailExpiredJobs() {
         int affected = jobRotationRepository.updateLateJobRotations();
         System.out.println("Updated " + affected + " job rotations to LATE status.");
+    }
+
+
+    public MarkCompletionResponse markJobCompleted(MarkCompletionRequest request, String expectedRole) {
+        MarkCompletionResponse response = new MarkCompletionResponse();
+        try {
+            if (request.getJobRotationId() == null) {
+                MarkCompletionResponse errorResponse = new MarkCompletionResponse();
+                errorResponse.setSuccess(false);
+                errorResponse.setMessage("Job rotation ID không được để trống");
+                return response;
+            }
+            Optional<JobRotation> jobRotationOpt = jobRotationRepository.findById(request.getJobRotationId());
+
+            if (!jobRotationOpt.isPresent()) {
+                response.setSuccess(false);
+                response.setMessage("Không tìm thấy công việc với ID: " + request.getJobRotationId());
+                return response;
+            }
+            JobRotation jobRotation = jobRotationOpt.get();
+            if (!expectedRole.equals(jobRotation.getRole())) {
+                response.setSuccess(false);
+                response.setMessage("Chỉ " + expectedRole.toLowerCase() + " mới có thể thực hiện hành động này");
+                return response;
+            }
+
+            if (!("ASSIGNED".equals(jobRotation.getStatus()))) {
+                response.setSuccess(false);
+                response.setMessage("Không đủ điều kiện");
+                return response;
+            }
+
+            jobRotation.setStatus("COMPLETED");
+            jobRotation.setUpdatedAt(LocalDateTime.now());
+            jobRotationRepository.save(jobRotation);
+            response.setSuccess(true);
+            response.setMessage("Đánh dấu hoàn thành công việc thành công");
+            findDriverAndAssigned(request.getTonnage());
+        } catch (Exception e) {
+            response.setSuccess(false);
+            response.setMessage("Lỗi hệ thống: " + e.getMessage());
+        }
+
+        return response;
+    }
+    /**
+     * Cập nhật trạng thái hoàn thành trong bảng t_rotation_storeId khi collector hoàn thành
+     */
+
+    /**
+     * Gửi thông báo cập nhật trạng thái công việc qua WebSocket
+     */
+
+
+    private void findDriverAndAssigned(int tonnage){
+
+    }
+    private void updateJobStatus(JobRotation jobRotation) {
+        try {
+            // Tạo data update
+            Map<String, Object> statusUpdate = new HashMap<>();
+            statusUpdate.put("jobRotationId", jobRotation.getId());
+            statusUpdate.put("status", jobRotation.getStatus());
+            statusUpdate.put("role", jobRotation.getRole());
+            statusUpdate.put("rotationDate", jobRotation.getRotationDate());
+            statusUpdate.put("updatedAt", jobRotation.getUpdatedAt());
+
+
+        } catch (Exception e) {
+            // Log error nhưng không ảnh hưởng đến business logic
+            System.err.println("Error updating job status: " + e.getMessage());
+        }
     }
 
 }

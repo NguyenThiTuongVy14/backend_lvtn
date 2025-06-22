@@ -2,6 +2,8 @@ package com.example.test.controller;
 
 import com.example.test.dto.DriverJobWithCollectorStatusDTO;
 import com.example.test.dto.JobRotationDetailDTO;
+import com.example.test.dto.MarkCompletionRequest;
+import com.example.test.dto.MarkCompletionResponse;
 import com.example.test.entity.JobRotation;
 import com.example.test.entity.Staff;
 import com.example.test.repository.JobRotationRepository;
@@ -37,7 +39,6 @@ public class JobRotationController {
     }
 
 
-    // Lấy danh sách tất cả lịch phân công (chỉ ADMIN)
     @GetMapping
     public ResponseEntity<?> getAllJobRotations() {
         try {
@@ -112,7 +113,6 @@ public class JobRotationController {
             @RequestParam(value = "date", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
         String username = SecurityContextHolder.getContext().getAuthentication().getName();
         System.out.println("Logged in username: " + username);
-
         List<JobRotationDetailDTO> rotations;
         if (date != null) {
             rotations = jobRotationService.getMyJobRotationsByDate(username, date);
@@ -122,23 +122,34 @@ public class JobRotationController {
 
         return ResponseEntity.ok(rotations);
     }
-    @GetMapping("/driver")
-    public ResponseEntity<List<DriverJobWithCollectorStatusDTO>> getDriverJobs(
-            @RequestParam(value = "date", required = false)
-            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
+    @PostMapping("/collector/completed")
+    public ResponseEntity<MarkCompletionResponse> collectorMarkCompleted(
+            @RequestBody MarkCompletionRequest request) {
 
-        String username = SecurityContextHolder.getContext().getAuthentication().getName();
-        System.out.println("Driver logged in username: " + username);
-
-        List<DriverJobWithCollectorStatusDTO> jobs;
-        if (date != null) {
-            jobs = jobRotationService.getDriverJobsWithCollectorStatusByDate(username, date);
+        MarkCompletionResponse response = jobRotationService.markJobCompleted(request, "COLLECTOR");
+        if (response.isSuccess()) {
+            return ResponseEntity.ok(response);
         } else {
-            jobs = jobRotationService.getDriverJobsWithCollectorStatusByDate(username, LocalDate.now());
+            return ResponseEntity.badRequest().body(response);
         }
-
-        return ResponseEntity.ok(jobs);
     }
+//    @GetMapping("/driver")
+//    public ResponseEntity<List<DriverJobWithCollectorStatusDTO>> getDriverJobs(
+//            @RequestParam(value = "date", required = false)
+//            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
+//
+//        String username = SecurityContextHolder.getContext().getAuthentication().getName();
+//        System.out.println("Driver logged in username: " + username);
+//
+//        List<DriverJobWithCollectorStatusDTO> jobs;
+//        if (date != null) {
+//            jobs = jobRotationService.getDriverJobsWithCollectorStatusByDate(username, date);
+//        } else {
+//            jobs = jobRotationService.getDriverJobsWithCollectorStatusByDate(username, LocalDate.now());
+//        }
+//
+//        return ResponseEntity.ok(jobs);
+//    }
     private record ResponseMessage(String message, Object data) {
         ResponseMessage(String message) {
             this(message, null);

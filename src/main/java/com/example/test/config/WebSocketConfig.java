@@ -1,5 +1,7 @@
 package com.example.test.config;
 
+import com.example.test.websocket.WebSocketAuthInterceptor;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.messaging.simp.config.ChannelRegistration;
 import org.springframework.messaging.simp.config.MessageBrokerRegistry;
@@ -11,15 +13,24 @@ import org.springframework.web.socket.config.annotation.WebSocketMessageBrokerCo
 @EnableWebSocketMessageBroker
 public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
+    @Autowired
+    private WebSocketAuthInterceptor authInterceptor;
+
     @Override
-    public void configureMessageBroker(MessageBrokerRegistry config) {
-        config.enableSimpleBroker("/topic", "/queue");
-        config.setApplicationDestinationPrefixes("/app");
-        config.setUserDestinationPrefix("/user");
+    public void configureClientInboundChannel(ChannelRegistration registration) {
+        registration.interceptors(authInterceptor);
     }
 
     @Override
     public void registerStompEndpoints(StompEndpointRegistry registry) {
-        registry.addEndpoint("/ws").setAllowedOriginPatterns("*").withSockJS();
+        registry.addEndpoint("/ws")
+                .setAllowedOrigins("*")
+                .withSockJS();
+    }
+
+    @Override
+    public void configureMessageBroker(MessageBrokerRegistry registry) {
+        registry.enableSimpleBroker("/topic", "/queue");
+        registry.setApplicationDestinationPrefixes("/app");
     }
 }

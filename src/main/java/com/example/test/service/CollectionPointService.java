@@ -88,10 +88,7 @@ public class CollectionPointService {
                 updateRotationStoreCompletion(savedJobRotation);
             }
 
-            // Gửi socket update
             updateJobStatus(savedJobRotation);
-
-            // Tạo response thành công
             response.setSuccess(true);
             response.setMessage("Đánh dấu hoàn thành công việc thành công");
             response.setJobRotationId(savedJobRotation.getId());
@@ -145,7 +142,6 @@ public class CollectionPointService {
             statusUpdate.put("rotationDate", jobRotation.getRotationDate());
             statusUpdate.put("updatedAt", jobRotation.getUpdatedAt());
 
-            // Gửi update đến các app khác
             System.out.println("Sending to WebSocket: " + statusUpdate);
             messagingTemplate.convertAndSend("/topic/job-status-"+jobRotation.getJobPositionId(), statusUpdate);
 

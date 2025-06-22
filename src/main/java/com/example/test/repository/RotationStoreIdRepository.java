@@ -7,6 +7,4 @@ import java.util.List;
 
 public  interface RotationStoreIdRepository extends JpaRepository<RotationStoreId, Integer> {
     List<RotationStoreId> findByRotationIdCollector(Integer rotationIdCollector);
-
-
 }

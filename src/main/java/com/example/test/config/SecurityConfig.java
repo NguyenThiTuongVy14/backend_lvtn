@@ -114,6 +114,10 @@ public class SecurityConfig {
                         .hasAnyAuthority("COLLECTOR", "DRIVER", "ADMIN")
                         .requestMatchers("/api/job-rotations/my-active-rotations")
                         .hasAnyAuthority("COLLECTOR", "DRIVER", "ADMIN")
+                        .requestMatchers(HttpMethod.POST, "/api/job-rotations/collector/**")
+                        .hasAuthority("COLLECTOR")
+                        .requestMatchers(HttpMethod.POST, "/api/job-rotations/driver/**")
+                        .hasAuthority("DRIVER")
 
                         // Staff endpoints
                         .requestMatchers(HttpMethod.POST, "/api/staff")

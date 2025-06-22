@@ -93,9 +93,7 @@ public interface JobRotationRepository extends JpaRepository<JobRotation, Intege
     """, nativeQuery = true)
     List<JobRotation> findAllDriverJobs(@Param("staffId") Integer staffId);
 
-    /**
-     * Lấy tất cả công việc của collector (không phân biệt status)
-     */
+
     @Query(value = """
     SELECT jr.* FROM t_job_rotation jr
     WHERE jr.staff_id = :staffId 
@@ -143,26 +141,28 @@ public interface JobRotationRepository extends JpaRepository<JobRotation, Intege
             sh.start_time,
             sh.end_time,
             
-            -- Chỉ trạng thái collector đã hoàn thành hay chưa
-            rs.is_completed AS collector_completed
             
         FROM t_job_rotation jr
         JOIN t_user s ON jr.staff_id = s.id
         JOIN t_job_position jp ON jr.position_id = jp.id
         JOIN t_shift sh ON jr.shift_id = sh.id
         LEFT JOIN t_vehicle v ON jr.vehicle_id = v.id
-        
-        -- JOIN với bảng rotation_storeId để lấy trạng thái collector
-        LEFT JOIN t_rotation_storeId rs ON rs.rotation_id_driver = jr.id
-        
         WHERE s.user_name = :userName
-        AND jr.role = 'DRIVER'
         AND DATE(jr.rotation_date) = DATE(:rotationDate)
-        
         ORDER BY jr.created_at DESC
         """, nativeQuery = true)
     List<DriverJobWithCollectorStatusDTO> findDriverJobsWithCollectorStatusByDate(
             @Param("userName") String userName,
             @Param("rotationDate") LocalDate rotationDate);
 
+
+
+
+    @Query(value = """
+    SELECT jr.* FROM t_job_rotation jr
+    WHERE jr.status = '' 
+    AND jr.role = 'DRIVER'
+    ORDER BY jr.rotation_date ASC, jr.created_at ASC
+    """, nativeQuery = true)
+    List<JobRotation> findAllDriverJobs(@Param("staffId") Integer staffId);
 }
