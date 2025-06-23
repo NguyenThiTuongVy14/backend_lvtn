@@ -2,6 +2,7 @@ package com.example.test.repository;
 
 import com.example.test.dto.DriverJobWithCollectorStatusDTO;
 import com.example.test.dto.JobRotationDetailDTO;
+import com.example.test.entity.JobPosition;
 import com.example.test.entity.JobRotation;
 import jakarta.transaction.Transactional;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -12,6 +13,7 @@ import org.springframework.stereotype.Repository;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Optional;
 
 @Repository
 public interface JobRotationRepository extends JpaRepository<JobRotation, Integer> {
@@ -159,10 +161,16 @@ public interface JobRotationRepository extends JpaRepository<JobRotation, Intege
 
 
     @Query(value = """
-    SELECT jr.* FROM t_job_rotation jr
-    WHERE jr.status = '' 
-    AND jr.role = 'DRIVER'
-    ORDER BY jr.rotation_date ASC, jr.created_at ASC
+            SELECT t_job_rotation.*
+            FROM t_job_rotation
+            LEFT JOIN t_shift ON t_job_rotation.shift_id = t_shift.id
+            LEFT JOIN t_user ON t_job_rotation.staff_id = t_user.id
+            WHERE t_job_rotation.status = ''
+            AND t_job_rotation.role = 'DRIVER'
+            AND left_tonnage > :tonnage
+            AND NOW() BETWEEN t_shift.start_time AND t_shift.end_time
+            ORDER BY t_user.rate DESC LIMIT 1;
+                                                    
     """, nativeQuery = true)
-    List<JobRotation> findAllDriverJobs(@Param("staffId") Integer staffId);
+    Optional<JobRotation> findDriver(@Param("tonnage") Integer tonnage);
 }

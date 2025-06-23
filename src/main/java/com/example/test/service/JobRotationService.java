@@ -7,10 +7,12 @@ import com.example.test.repository.JobRotationRepository;
 import com.example.test.repository.StaffRepository;
 import com.example.test.repository.VehicleRepository;
 import jakarta.transaction.Transactional;
+import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.stereotype.Component;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
@@ -19,23 +21,10 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 @Service
+@RequiredArgsConstructor
 public class JobRotationService {
-
     private final JobRotationRepository jobRotationRepository;
-    private final StaffRepository staffRepository;
-    private final JobPositionRepository jobPositionRepository;
-    private final VehicleRepository vehicleRepository;
 
-    @Autowired
-    public JobRotationService(JobRotationRepository jobRotationRepository,
-                              StaffRepository staffRepository,
-                              JobPositionRepository jobPositionRepository,
-                              VehicleRepository vehicleRepository) {
-        this.jobRotationRepository = jobRotationRepository;
-        this.staffRepository = staffRepository;
-        this.jobPositionRepository = jobPositionRepository;
-        this.vehicleRepository = vehicleRepository;
-    }
     public List<JobRotationDetailDTO> getMyJobRotationsByDate(String userName, LocalDate date) {
         System.out.println("Getting rotations for user: " + userName + " on date: " + date);
         return jobRotationRepository.findByUserNameAndDate(userName, date);
@@ -97,17 +86,14 @@ public class JobRotationService {
 
         return response;
     }
-    /**
-     * Cập nhật trạng thái hoàn thành trong bảng t_rotation_storeId khi collector hoàn thành
-     */
+    private void findDriverAndAssigned(Integer tonnage){
+        Optional<JobRotation> jobRotationOpt = jobRotationRepository.findDriver(tonnage);
+        JobRotation jobRotation = jobRotationOpt.get();
+        jobRotation.setStatus("ASSIGNED");
+        jobRotation.setUpdatedAt(LocalDateTime.now());
+        jobRotationRepository.save(jobRotation);
 
-    /**
-     * Gửi thông báo cập nhật trạng thái công việc qua WebSocket
-     */
-
-
-    private void findDriverAndAssigned(int tonnage){
-
+        //Socket
     }
     private void updateJobStatus(JobRotation jobRotation) {
         try {
