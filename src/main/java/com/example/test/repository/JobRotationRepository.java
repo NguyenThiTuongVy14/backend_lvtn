@@ -173,4 +173,12 @@ public interface JobRotationRepository extends JpaRepository<JobRotation, Intege
                                                     
     """, nativeQuery = true)
     Optional<JobRotation> findDriver(@Param("tonnage") Integer tonnage);
+
+
+    boolean existsByVehicleIdAndRotationDate(Integer vehicleId, LocalDate date);
+
+    List<JobRotation> findByStaffIdAndRotationDateAndStatus(Integer id, LocalDate now, String pending);
+
+
+    List<JobRotation> findByRoleAndStatusAndRotationDate(String collector, String completed, LocalDate now);
 }

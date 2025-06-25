@@ -118,6 +118,8 @@ public class SecurityConfig {
                         .hasAuthority("COLLECTOR")
                         .requestMatchers(HttpMethod.POST, "/api/job-rotations/driver/**")
                         .hasAuthority("DRIVER")
+                        .requestMatchers(HttpMethod.GET, "/api/job-rotations/driver/**")
+                        .hasAuthority("DRIVER")
 
                         // Staff endpoints
                         .requestMatchers(HttpMethod.POST, "/api/staff")
