@@ -26,4 +26,9 @@ public interface VehicleRepository extends JpaRepository<Vehicle, Integer> {
     List<Vehicle> findAvailableVehicles(
             @Param("requiredTonnage") BigDecimal requiredTonnage,
             @Param("date") LocalDate date
-    );}
+    );
+
+    List<Vehicle> findByStatusAndTonnageGreaterThanEqual(String available, BigDecimal requiredTonnage);
+
+    void updateStatus(Integer vehicleId, String inUse);
+}

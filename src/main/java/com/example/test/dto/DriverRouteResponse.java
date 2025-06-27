@@ -12,9 +12,9 @@ public class DriverRouteResponse {
     private String licensePlate;
     private BigDecimal vehicleCapacity;
     private BigDecimal remainingCapacity;
-    private List<JobPosition> optimizedPoints;
+    private List<RoutePoint> optimizedPoints;
     public DriverRouteResponse(String message, String licensePlate, BigDecimal vehicleCapacity,
-                               BigDecimal remainingCapacity, List<JobPosition> optimizedPoints) {
+                               BigDecimal remainingCapacity, List<RoutePoint> optimizedPoints) {
         this.message = message;
         this.licensePlate = licensePlate;
         this.vehicleCapacity = vehicleCapacity;

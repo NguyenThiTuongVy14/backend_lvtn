@@ -30,4 +30,7 @@ public class RotationLog {
 
     @Column(name = "rotation_date")
     private LocalDate rotationDate;
+
+    @Column(name = "updated_at")
+    private LocalDateTime updatedAt;
 }

@@ -181,4 +181,27 @@ public interface JobRotationRepository extends JpaRepository<JobRotation, Intege
 
 
     List<JobRotation> findByRoleAndStatusAndRotationDate(String collector, String completed, LocalDate now);
+    @Modifying
+    @Query("UPDATE JobRotation jr SET jr.status = :status WHERE jr.id = :jobId")
+    void updateJobStatus(@Param("jobId") Integer jobId, @Param("status") String status);
+
+    boolean existsByStaffIdAndRotationDate(Integer driverId, LocalDate date,Integer shiftId);
+
+    @Query("SELECT jr FROM JobRotation jr " +
+            "WHERE jr.staffId = :driverId " +
+            "AND jr.rotationDate = :date " +
+            "AND jr.status = :status " +
+            "AND jr.role = 'DRIVER'")
+    List<JobRotation> findCurrentDriverJobs(Integer id, LocalDate now, String pending);
+
+    @Query("SELECT jr.id, jr.jobPositionId, jr.smallTrucksCount " +
+            "FROM JobRotation jr " +
+            "WHERE jr.rotationDate = :date " +
+            "AND jr.status = 'COMPLETED' " +
+            "AND jr.role = 'COLLECTOR' " +
+            "AND jr.shiftId = :shiftId")
+    List<Object[]> findCompletedCollectionsWithTruckCounts(
+            @Param("date") LocalDate date,
+            @Param("shiftId") Integer shiftId
+    );
 }

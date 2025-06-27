@@ -41,4 +41,7 @@ public class JobRotation {
 
     @Column(name = "shift_id")
     private Integer shiftId;
+
+    @Column(name = "small_trucks_count")
+    private Integer smallTrucksCount;
 }
