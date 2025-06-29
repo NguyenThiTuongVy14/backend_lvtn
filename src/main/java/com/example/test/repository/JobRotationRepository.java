@@ -185,7 +185,7 @@ public interface JobRotationRepository extends JpaRepository<JobRotation, Intege
     @Query("UPDATE JobRotation jr SET jr.status = :status WHERE jr.id = :jobId")
     void updateJobStatus(@Param("jobId") Integer jobId, @Param("status") String status);
 
-    boolean existsByStaffIdAndRotationDate(Integer driverId, LocalDate date,Integer shiftId);
+    boolean existsByStaffIdAndRotationDateAndShiftId(Integer staffId, LocalDate rotationDate, Integer shiftId);
 
     @Query("SELECT jr FROM JobRotation jr " +
             "WHERE jr.staffId = :driverId " +

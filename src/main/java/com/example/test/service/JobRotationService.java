@@ -164,7 +164,7 @@ public class JobRotationService {
     // Kiểm tra tài xế đã có phân công chưa
     private boolean isDriverAssigned(Integer driverId, LocalDate date, Integer shiftId // Thêm tham số shiftId
     ) {
-        return jobRotationRepository.existsByStaffIdAndRotationDate(driverId, date,shiftId);
+        return jobRotationRepository.existsByStaffIdAndRotationDateAndShiftId(driverId, date,shiftId);
     }
     private void createJobRotation(
             Integer driverId,
