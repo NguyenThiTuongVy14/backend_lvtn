@@ -40,6 +40,8 @@ public interface StaffRepository extends JpaRepository<Staff, Integer> {
     @Query("SELECT a.name FROM Staff s JOIN Authority a ON s.authorityId = a.id WHERE s.userName = :userName")
     Optional<String> findAuthorityNameByUserName(@Param("userName") String userName);
 
+    @Query("SELECT a.name FROM Staff s JOIN Authority a ON s.authorityId = a.id WHERE s.userName = :userName")
+    String findAuthorityName(@Param("userName") String userName);
     // Lấy tên Authority của một Staff theo ID
     @Query("SELECT a.name FROM Staff s JOIN Authority a ON s.authorityId = a.id WHERE s.id = :staffId")
     Optional<String> findAuthorityNameByStaffId(@Param("staffId") Integer staffId);

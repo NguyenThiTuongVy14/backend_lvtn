@@ -139,6 +139,9 @@ public class SecurityConfig {
 
                         .requestMatchers(HttpMethod.GET,"/api/test-auth")
                         .hasAnyAuthority("COLLECTOR", "DRIVER", "ADMIN")
+
+                        .requestMatchers(HttpMethod.GET,"/api/shifts")
+                        .hasAnyAuthority("COLLECTOR", "DRIVER", "ADMIN")
                         // Tất cả endpoints khác - chỉ ADMIN
                         .anyRequest().hasAuthority("ADMIN")
                 )
