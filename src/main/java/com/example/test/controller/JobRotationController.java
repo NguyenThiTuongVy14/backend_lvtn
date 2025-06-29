@@ -1,6 +1,5 @@
 package com.example.test.controller;
 
-import com.example.test.cache.TruckCountCache;
 import com.example.test.dto.*;
 import com.example.test.entity.*;
 import com.example.test.repository.*;
@@ -13,12 +12,10 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
 import java.math.BigDecimal;
-import java.sql.Driver;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.*;
-import java.util.concurrent.TimeUnit;
-import java.util.stream.Collectors;
+
 
 @RestController
 @RequestMapping("/api/job-rotations")
@@ -30,7 +27,6 @@ public class JobRotationController {
     private final ShiftRepository shiftRepository;
     private final VehicleRepository  vehicleRepository;
     private final RotationLogRepository  rotationLogRepository;
-    private final DriverRatingRepository driverRatingRepository;
     private final JobPositionRepository jobPositionRepository;
     @Autowired
     public JobRotationController(JobRotationRepository jobRotationRepository,
@@ -42,7 +38,6 @@ public class JobRotationController {
         this.shiftRepository = shiftRepository;
         this.vehicleRepository = vehicleRepository;
         this.rotationLogRepository = rotationLogRepository;
-        this.driverRatingRepository = driverRatingRepository;
         this.jobPositionRepository = jobPositionRepository;
     }
 
@@ -130,17 +125,7 @@ public class JobRotationController {
 
         return ResponseEntity.ok(rotations);
     }
-//    @PostMapping("/collector/completed")
-//    public ResponseEntity<MarkCompletionResponse> collectorMarkCompleted(
-//            @RequestBody MarkCompletionRequest request) {
-//
-//        MarkCompletionResponse response = jobRotationService.markJobCompleted(request, "COLLECTOR");
-//        if (response.isSuccess()) {
-//            return ResponseEntity.ok(response);
-//        } else {
-//            return ResponseEntity.badRequest().body(response);
-//        }
-//    }
+
     // API để tài xế đăng ký ca làm việc
     @PostMapping("/driver/register-shift")
     public ResponseEntity<?> registerDriverShift(@RequestBody DriverShiftRegistrationRequest request) {
@@ -154,17 +139,10 @@ public class JobRotationController {
                 return ResponseEntity.badRequest().body(new ErrorMessage("Ca làm việc không tồn tại"));
             }
 
-            // Kiểm tra xe tồn tại và có sẵn sàng
-//            Optional<Vehicle> vehicleOpt = vehicleRepository.findById(request.getVehicleId());
-//            if (vehicleOpt.isEmpty() || !"AVAILABLE".equals(vehicleOpt.get().getStatus())) {
-//                return ResponseEntity.badRequest().body(new ErrorMessage("Xe không khả dụng"));
-//            }
-
             // Lưu vào bảng rotation log với trạng thái REQUEST
             RotationLog log = new RotationLog();
             log.setStaffId(driver.getId());
             log.setShiftId(request.getShiftId());
-//            log.setVehicleId(request.getVehicleId());
             log.setStatus("REQUEST");
             log.setRequestedAt(LocalDateTime.now());
             log.setRotationDate(request.getRotationDate());
@@ -186,11 +164,6 @@ public class JobRotationController {
             String username = SecurityContextHolder.getContext().getAuthentication().getName();
             Staff collector = staffRepository.findByUserName(username);
 
-//            if (collector == null || !"COLLECTOR".equals(collector.getRole())) {
-//                return ResponseEntity.status(HttpStatus.FORBIDDEN)
-//                        .body(new ErrorMessage("Chỉ người gom rác mới được sử dụng chức năng này"));
-//            }
-
             // 2. Kiểm tra công việc tồn tại và thuộc về người này
             Optional<JobRotation> currentJobOpt = jobRotationRepository.findById(request.getJobRotationId());
             if (currentJobOpt.isEmpty() || !currentJobOpt.get().getStaffId().equals(collector.getId())) {
@@ -206,7 +179,7 @@ public class JobRotationController {
             jobRotationRepository.save(currentJob);
 
             // 4. Tự động phân công tài xế
-            assignDriverForCollectionPoint(
+            jobRotationService.assignDriverForCollectionPoint(
                     currentJob.getJobPositionId(),
                     request.getSmallTrucksCount(),
                     currentJob.getRotationDate(),
@@ -220,96 +193,28 @@ public class JobRotationController {
                     .body(new ErrorMessage("Lỗi khi đánh dấu hoàn thành: " + e.getMessage()));
         }
     }
+    @PostMapping("/driver/completed")
+    public ResponseEntity<MarkCompletionResponse> driverMarkCompleted(
+            @RequestBody MarkCompletionRequest request) {
 
-    // Phương thức phân công tài xế
-    private void assignDriverForCollectionPoint(
-            Integer jobRotationId,
-            Integer smallTrucksCount, // Số xe từ request
-            LocalDate rotationDate,
-            Integer shiftId
-    ) {
-        // 1. Tính tải trọng cần thiết (1 xe = 1 tấn)
-        BigDecimal requiredTonnage = new BigDecimal(smallTrucksCount);
+        // Validation
+        if (request.getJobRotationId() == null) {
+            MarkCompletionResponse errorResponse = new MarkCompletionResponse();
+            errorResponse.setSuccess(false);
+            errorResponse.setMessage("Job rotation ID không được để trống");
+            return ResponseEntity.badRequest().body(errorResponse);
+        }
 
-        // 2. Tìm xe phù hợp
-        List<Vehicle> suitableVehicles = vehicleRepository
-                .findByStatusAndTonnageGreaterThanEqual("AVAILABLE", requiredTonnage);
+        MarkCompletionResponse response = jobRotationService.markJobCompleted(request, "DRIVER");
 
-        // 3. Tìm tài xế đã đăng ký
-        Optional<RotationLog> driverRequest = findAvailableDriver(rotationDate,shiftId);
-
-        // 4. Tạo phân công nếu tìm thấy
-        if (driverRequest.isPresent() && !suitableVehicles.isEmpty()) {
-            createJobRotation(
-                    driverRequest.get().getStaffId(),
-                    suitableVehicles.get(0).getId(),
-                    jobRotationId
-            );
+        if (response.isSuccess()) {
+            return ResponseEntity.ok(response);
+        } else {
+            return ResponseEntity.badRequest().body(response);
         }
     }
-    private Optional<RotationLog> findAvailableDriver(LocalDate date,Integer shiftId) {
-        // 1. Lấy tất cả tài xế đã đăng ký ca trong ngày
-        List<RotationLog> driverRequests = rotationLogRepository
-                .findByStatusAndRotationDate("REQUEST", date);
 
-        // 2. Sắp xếp theo rating giảm dần
-        Map<Integer, Double> driverRatings = driverRatingRepository.findAll().stream()
-                .collect(Collectors.toMap(
-                        DriverRating::getDriverId,
-                        DriverRating::getAverageRating
-                ));
-
-        driverRequests.sort((a, b) -> {
-            Double ratingA = driverRatings.getOrDefault(a.getStaffId(), 0.0);
-            Double ratingB = driverRatings.getOrDefault(b.getStaffId(), 0.0);
-            return ratingB.compareTo(ratingA);
-        });
-
-        // 3. Lọc tài xế chưa có phân công trong ngày
-        return driverRequests.stream()
-                .filter(request -> !isDriverAssigned(request.getStaffId(), date,shiftId))
-                .findFirst();
-    }
-
-    // Kiểm tra tài xế đã có phân công chưa
-    private boolean isDriverAssigned(Integer driverId, LocalDate date, Integer shiftId // Thêm tham số shiftId
-    ) {
-        return jobRotationRepository.existsByStaffIdAndRotationDate(driverId, date,shiftId);
-    }
-    private void createJobRotation(
-            Integer driverId,
-            Integer vehicleId,
-            Integer collectionJobId
-    ) {
-        // 1. Lấy thông tin điểm thu gom từ job của collector
-        JobRotation collectionJob = jobRotationRepository.findById(collectionJobId)
-                .orElseThrow(() -> new RuntimeException("Không tìm thấy công việc thu gom"));
-
-        // 2. Tạo phân công cho tài xế
-        JobRotation driverJob = new JobRotation();
-        driverJob.setStaffId(driverId);
-        driverJob.setVehicleId(vehicleId);
-        driverJob.setJobPositionId(collectionJob.getJobPositionId());
-        driverJob.setRole("DRIVER");
-        driverJob.setStatus("PENDING");
-        driverJob.setRotationDate(LocalDate.now());
-        driverJob.setShiftId(collectionJob.getShiftId());
-        driverJob.setCreatedAt(LocalDateTime.now());
-
-        // 3. Lưu vào DB
-        jobRotationRepository.save(driverJob);
-
-        // 4. Cập nhật trạng thái log
-        rotationLogRepository.updateStatusByStaffIdAndUpdatedAt(
-                "ASSIGNED",
-                driverId,
-                LocalDateTime.now()
-        );
-
-        // 5. Đánh dấu xe đã được sử dụng
-        vehicleRepository.updateStatus(vehicleId, "IN_USE");
-    }
-
+    // Phương thức phân công tài xế
     @GetMapping("/driver/optimized-routes")
     public ResponseEntity<?> getOptimizedRoutesForDriver() {
         try {

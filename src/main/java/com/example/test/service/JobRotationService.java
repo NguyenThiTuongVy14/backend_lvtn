@@ -2,10 +2,7 @@ package com.example.test.service;
 
 import com.example.test.dto.*;
 import com.example.test.entity.*;
-import com.example.test.repository.JobPositionRepository;
-import com.example.test.repository.JobRotationRepository;
-import com.example.test.repository.StaffRepository;
-import com.example.test.repository.VehicleRepository;
+import com.example.test.repository.*;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -15,6 +12,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 import org.springframework.stereotype.Service;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.*;
@@ -24,6 +22,9 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class JobRotationService {
     private final JobRotationRepository jobRotationRepository;
+    private final VehicleRepository vehicleRepository;
+    private final RotationLogRepository rotationLogRepository;
+    private final DriverRatingRepository driverRatingRepository;
 
     public List<JobRotationDetailDTO> getMyJobRotationsByDate(String userName, LocalDate date) {
         System.out.println("Getting rotations for user: " + userName + " on date: " + date);
@@ -95,7 +96,7 @@ public class JobRotationService {
 
         //Socket
     }
-    private void updateJobStatus(JobRotation jobRotation) {
+    public void updateJobStatus(JobRotation jobRotation) {
         try {
             // Tạo data update
             Map<String, Object> statusUpdate = new HashMap<>();
@@ -110,6 +111,93 @@ public class JobRotationService {
             // Log error nhưng không ảnh hưởng đến business logic
             System.err.println("Error updating job status: " + e.getMessage());
         }
+    }
+    public void assignDriverForCollectionPoint(
+            Integer jobRotationId,
+            Integer smallTrucksCount, // Số xe từ request
+            LocalDate rotationDate,
+            Integer shiftId
+    ) {
+        // 1. Tính tải trọng cần thiết (1 xe = 1 tấn)
+        BigDecimal requiredTonnage = new BigDecimal(smallTrucksCount);
+
+        // 2. Tìm xe phù hợp
+        List<Vehicle> suitableVehicles = vehicleRepository
+                .findByStatusAndTonnageGreaterThanEqual("AVAILABLE", requiredTonnage);
+
+        // 3. Tìm tài xế đã đăng ký
+        Optional<RotationLog> driverRequest = findAvailableDriver(rotationDate,shiftId);
+
+        // 4. Tạo phân công nếu tìm thấy
+        if (driverRequest.isPresent() && !suitableVehicles.isEmpty()) {
+            createJobRotation(
+                    driverRequest.get().getStaffId(),
+                    suitableVehicles.get(0).getId(),
+                    jobRotationId
+            );
+        }
+    }
+    private Optional<RotationLog> findAvailableDriver(LocalDate date,Integer shiftId) {
+        // 1. Lấy tất cả tài xế đã đăng ký ca trong ngày
+        List<RotationLog> driverRequests = rotationLogRepository
+                .findByStatusAndRotationDate("REQUEST", date);
+
+        // 2. Sắp xếp theo rating giảm dần
+        Map<Integer, Double> driverRatings = driverRatingRepository.findAll().stream()
+                .collect(Collectors.toMap(
+                        DriverRating::getDriverId,
+                        DriverRating::getAverageRating
+                ));
+
+        driverRequests.sort((a, b) -> {
+            Double ratingA = driverRatings.getOrDefault(a.getStaffId(), 0.0);
+            Double ratingB = driverRatings.getOrDefault(b.getStaffId(), 0.0);
+            return ratingB.compareTo(ratingA);
+        });
+
+        // 3. Lọc tài xế chưa có phân công trong ngày
+        return driverRequests.stream()
+                .filter(request -> !isDriverAssigned(request.getStaffId(), date,shiftId))
+                .findFirst();
+    }
+
+    // Kiểm tra tài xế đã có phân công chưa
+    private boolean isDriverAssigned(Integer driverId, LocalDate date, Integer shiftId // Thêm tham số shiftId
+    ) {
+        return jobRotationRepository.existsByStaffIdAndRotationDate(driverId, date,shiftId);
+    }
+    private void createJobRotation(
+            Integer driverId,
+            Integer vehicleId,
+            Integer collectionJobId
+    ) {
+        // 1. Lấy thông tin điểm thu gom từ job của collector
+        JobRotation collectionJob = jobRotationRepository.findById(collectionJobId)
+                .orElseThrow(() -> new RuntimeException("Không tìm thấy công việc thu gom"));
+
+        // 2. Tạo phân công cho tài xế
+        JobRotation driverJob = new JobRotation();
+        driverJob.setStaffId(driverId);
+        driverJob.setVehicleId(vehicleId);
+        driverJob.setJobPositionId(collectionJob.getJobPositionId());
+        driverJob.setRole("DRIVER");
+        driverJob.setStatus("PENDING");
+        driverJob.setRotationDate(LocalDate.now());
+        driverJob.setShiftId(collectionJob.getShiftId());
+        driverJob.setCreatedAt(LocalDateTime.now());
+
+        // 3. Lưu vào DB
+        jobRotationRepository.save(driverJob);
+
+        // 4. Cập nhật trạng thái log
+        rotationLogRepository.updateStatusByStaffIdAndUpdatedAt(
+                "ASSIGNED",
+                driverId,
+                LocalDateTime.now()
+        );
+
+        // 5. Đánh dấu xe đã được sử dụng
+        vehicleRepository.updateStatus(vehicleId, "IN_USE");
     }
 
 }
