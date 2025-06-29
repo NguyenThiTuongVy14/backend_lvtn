@@ -81,7 +81,7 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.POST, "/api/job-positions")
                         .hasAuthority("ADMIN")
                         .requestMatchers(HttpMethod.GET, "/api/job-positions")
-                        .hasAuthority("ADMIN")
+                        .hasAnyAuthority("ADMIN","DRIVER","COLLECTOR")
                         .requestMatchers(HttpMethod.PUT, "/api/job-positions/**")
                         .hasAuthority("ADMIN")
                         .requestMatchers(HttpMethod.DELETE, "/api/job-positions/**")
