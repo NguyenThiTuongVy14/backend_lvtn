@@ -9,6 +9,7 @@ import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
 import java.math.BigDecimal;
@@ -126,35 +127,44 @@ public class JobRotationController {
         return ResponseEntity.ok(rotations);
     }
 
-    // API để tài xế đăng ký ca làm việc
+    @Transactional
     @PostMapping("/driver/register-shift")
-    public ResponseEntity<?> registerDriverShift(@RequestBody DriverShiftRegistrationRequest request) {
+    public ResponseEntity<?> registerDriverShift(@RequestBody List<DriverShiftRegistrationRequest> requests) {
         try {
             String username = SecurityContextHolder.getContext().getAuthentication().getName();
             Staff driver = staffRepository.findByUserName(username);
+            Integer staffId = driver.getId();
 
-            // Kiểm tra ca làm việc tồn tại
-            Optional<Shift> shiftOpt = shiftRepository.findById(request.getShiftId());
-            if (shiftOpt.isEmpty()) {
-                return ResponseEntity.badRequest().body(new ErrorMessage("Ca làm việc không tồn tại"));
+            for (DriverShiftRegistrationRequest request : requests) {
+                for (Integer shiftId : request.getShiftId()) {
+                    if (rotationLogRepository.existsByStaffIdAndShiftIdAndRotationDate(
+                            staffId, shiftId, request.getRotationDate())) {
+                        throw new IllegalStateException("Đã đăng ký ca " + shiftId +
+                                " vào ngày " + request.getRotationDate());
+                    }
+
+                    RotationLog log = new RotationLog();
+                    log.setStaffId(staffId);
+                    log.setShiftId(shiftId);
+                    log.setStatus("REQUEST");
+                    log.setRequestedAt(LocalDateTime.now());
+                    log.setRotationDate(request.getRotationDate());
+
+                    rotationLogRepository.save(log);
+                }
             }
 
-            // Lưu vào bảng rotation log với trạng thái REQUEST
-            RotationLog log = new RotationLog();
-            log.setStaffId(driver.getId());
-            log.setShiftId(request.getShiftId());
-            log.setStatus("REQUEST");
-            log.setRequestedAt(LocalDateTime.now());
-            log.setRotationDate(request.getRotationDate());
-
-            rotationLogRepository.save(log);
-
             return ResponseEntity.ok(new ResponseMessage("Đăng ký ca làm việc thành công. Đang chờ xác nhận"));
+
+        } catch (IllegalStateException e) {
+            // rollback tự động do @Transactional
+            return ResponseEntity.badRequest().body(new ErrorMessage(e.getMessage()));
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(new ErrorMessage("Lỗi khi đăng ký ca làm việc: " + e.getMessage()));
+                    .body(new ErrorMessage("Lỗi hệ thống: " + e.getMessage()));
         }
     }
+
 
     // API để người gom rác đánh dấu hoàn thành công việc
     @PostMapping("/collector/completed")

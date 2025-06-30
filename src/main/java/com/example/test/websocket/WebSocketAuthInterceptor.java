@@ -26,10 +26,10 @@ public class WebSocketAuthInterceptor implements ChannelInterceptor {
             String token = accessor.getFirstNativeHeader("Authorization");
 
             if (token != null && token.startsWith("Bearer ")) {
-                token = token.substring(7); // Bỏ chữ "Bearer "
+                token = token.substring(7);
                 Authentication auth = jwtTokenProvider.getAuthentication(token);
                 if (auth != null) {
-                    accessor.setUser(auth); // Gắn vào WebSocket session
+                    accessor.setUser(auth);
                 } else {
                     throw new IllegalArgumentException("JWT không hợp lệ");
                 }

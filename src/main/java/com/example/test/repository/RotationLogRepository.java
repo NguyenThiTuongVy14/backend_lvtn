@@ -15,4 +15,9 @@ public interface RotationLogRepository extends JpaRepository<RotationLog,Integer
     @Query("update RotationLog r set r.status = :status where r.staffId = :staffId and r.updatedAt = :updatedAt")
     @Modifying
     void updateStatusByStaffIdAndUpdatedAt(String status, Integer staffId, LocalDateTime updatedAt);
+
+
+    boolean existsByStaffIdAndShiftIdAndRotationDate(Integer staffId, Integer shiftId, LocalDate rotationDate);
+
+
 }
