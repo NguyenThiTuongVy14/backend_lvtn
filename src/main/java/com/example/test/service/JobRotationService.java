@@ -114,16 +114,47 @@ public class JobRotationService {
     }
     @Transactional
     public void assignVehiclesForCollection(Integer locationId, BigDecimal totalTonnage, LocalDate rotationDate, Integer shiftId) {
-        BigDecimal remaining = totalTonnage;
 
-        // Ưu tiên tài xế cũ còn xe trống
-        Optional<JobRotation> existingJob = findDriverWithAvailableVehicle(rotationDate, shiftId);
-        if (existingJob.isPresent()) {
-            JobRotation job = existingJob.get();
-            Vehicle vehicle = vehicleRepository.findById(job.getVehicleId()).orElseThrow(() -> new RuntimeException("Không tìm thấy thông tin xe"));
+        List<Vehicle> vehicles = vehicleRepository.findByStatusIn(Arrays.asList("AVAILABLE", "IN_USE"));
+        vehicles.sort(Comparator.comparing(Vehicle::getRemainingTonnage).reversed());
+
+        // Bước 1: Tìm xe duy nhất đủ tải
+        for (Vehicle vehicle : vehicles) {
+            if (vehicle.getRemainingTonnage().compareTo(totalTonnage) >= 0) {
+
+                // Ưu tiên tìm tài xế cũ nếu có
+                Optional<JobRotation> existingJob = findDriverWithVehicle(vehicle.getId(), rotationDate, shiftId);
+                if (existingJob.isPresent()) {
+                    assignAdditionalJob(existingJob.get().getStaffId(), vehicle, locationId, totalTonnage, rotationDate, shiftId);
+                } else {
+                    Optional<RotationLog> driverOpt = findNewAvailableDriver(rotationDate, shiftId);
+                    if (driverOpt.isEmpty()) {
+                        notificationService.sendAdminAlert("Thiếu tài xế điều xe lớn, còn lại " + totalTonnage + " tấn chưa gom đủ");
+                        return;
+                    }
+                    assignJobToDriver(driverOpt.get(), vehicle, locationId, totalTonnage, rotationDate, shiftId);
+                }
+
+                vehicle.setRemainingTonnage(vehicle.getRemainingTonnage().subtract(totalTonnage));
+                vehicleRepository.save(vehicle);
+                return; // Giao hết cho 1 xe rồi, kết thúc
+            }
+        }
+
+        // Bước 2: Không có xe nào đủ tải, phải chia nhỏ
+        BigDecimal remaining = totalTonnage;
+        for (Vehicle vehicle : vehicles) {
+            if (remaining.compareTo(BigDecimal.ZERO) <= 0) break;
+            if (vehicle.getRemainingTonnage().compareTo(BigDecimal.ZERO) <= 0) continue;
+
+            Optional<RotationLog> driverOpt = findNewAvailableDriver(rotationDate, shiftId);
+            if (driverOpt.isEmpty()) {
+                notificationService.sendAdminAlert("Thiếu tài xế điều xe lớn, còn lại " + remaining + " tấn chưa gom đủ");
+                return;
+            }
 
             BigDecimal load = vehicle.getRemainingTonnage().min(remaining);
-            assignAdditionalJob(job.getStaffId(), vehicle, locationId, load, rotationDate, shiftId);
+            assignJobToDriver(driverOpt.get(), vehicle, locationId, load, rotationDate, shiftId);
 
             vehicle.setRemainingTonnage(vehicle.getRemainingTonnage().subtract(load));
             vehicleRepository.save(vehicle);
@@ -131,37 +162,13 @@ public class JobRotationService {
             remaining = remaining.subtract(load);
         }
 
-        // Lặp tiếp cho đến khi hết rác hoặc hết tài nguyên
-        while (remaining.compareTo(BigDecimal.ZERO) > 0) {
-            List<Vehicle> vehicles = vehicleRepository.findByStatusIn(Arrays.asList("AVAILABLE", "IN_USE"));
-            vehicles.sort(Comparator.comparing(Vehicle::getRemainingTonnage).reversed());
-
-            boolean assigned = false;
-            for (Vehicle vehicle : vehicles) {
-                if (vehicle.getRemainingTonnage().compareTo(BigDecimal.ZERO) <= 0) continue;
-
-                Optional<RotationLog> driverOpt = findNewAvailableDriver(rotationDate, shiftId);
-                if (driverOpt.isEmpty()) {
-                    notificationService.sendAdminAlert("Thiếu tài xế điều xe lớn, còn lại " + remaining + " tấn chưa gom đủ");
-                    return;
-                }
-
-                BigDecimal load = vehicle.getRemainingTonnage().min(remaining);
-                assignJobToDriver(driverOpt.get(), vehicle, locationId, load, rotationDate, shiftId);
-
-                vehicle.setRemainingTonnage(vehicle.getRemainingTonnage().subtract(load));
-                vehicleRepository.save(vehicle);
-
-                remaining = remaining.subtract(load);
-                assigned = true;
-                break;
-            }
-
-            if (!assigned) {
-                notificationService.sendAdminAlert("Hết xe hoặc không đủ sức chứa, còn lại " + remaining + " tấn chưa gom đủ");
-                break;
-            }
+        if (remaining.compareTo(BigDecimal.ZERO) > 0) {
+            notificationService.sendAdminAlert("Hết xe hoặc không đủ sức chứa, còn lại " + remaining + " tấn chưa gom đủ");
         }
+    }
+
+    private Optional<JobRotation> findDriverWithVehicle(Integer vehicleId, LocalDate date, Integer shiftId) {
+        return jobRotationRepository.findByVehicleIdAndRotationDateAndShiftId(vehicleId, date, shiftId);
     }
 
     private Optional<RotationLog> findNewAvailableDriver(LocalDate date, Integer shiftId) {
