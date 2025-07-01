@@ -192,9 +192,9 @@ public interface JobRotationRepository extends JpaRepository<JobRotation, Intege
             "AND jr.rotationDate = :date " +
             "AND jr.status = :status " +
             "AND jr.role = 'DRIVER'")
-    List<JobRotation> findCurrentDriverJobs(Integer id, LocalDate now, String pending);
+    List<JobRotation> findCurrentDriverJobs(Integer driverId, LocalDate date, String status);
 
-    @Query("SELECT jr.id, jr.jobPositionId, jr.smallTrucksCount " +
+    @Query("SELECT jr.id, jr.jobPositionId " +
             "FROM JobRotation jr " +
             "WHERE jr.rotationDate = :date " +
             "AND jr.status = 'COMPLETED' " +
@@ -204,4 +204,6 @@ public interface JobRotationRepository extends JpaRepository<JobRotation, Intege
             @Param("date") LocalDate date,
             @Param("shiftId") Integer shiftId
     );
+
+    List<JobRotation> findByRotationDateAndShiftIdAndRole(LocalDate date, Integer shiftId, String driver);
 }

@@ -5,11 +5,8 @@ import com.example.test.entity.*;
 import com.example.test.repository.*;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.ResponseEntity;
+import org.springframework.data.domain.Sort;
 import org.springframework.scheduling.annotation.Scheduled;
-import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.stereotype.Component;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
@@ -21,183 +18,273 @@ import java.util.stream.Collectors;
 @Service
 @RequiredArgsConstructor
 public class JobRotationService {
+
     private final JobRotationRepository jobRotationRepository;
     private final VehicleRepository vehicleRepository;
     private final RotationLogRepository rotationLogRepository;
     private final DriverRatingRepository driverRatingRepository;
+    private final JobPositionRepository jobPositionRepository;
+    private final NotificationService notificationService;
+    private final ShiftRepository shiftRepository;
 
     public List<JobRotationDetailDTO> getMyJobRotationsByDate(String userName, LocalDate date) {
-        System.out.println("Getting rotations for user: " + userName + " on date: " + date);
         return jobRotationRepository.findByUserNameAndDate(userName, date);
     }
-    /**
-     * Lấy danh sách công việc của driver với thông tin collector status theo ngày
-     */
-    public List<DriverJobWithCollectorStatusDTO> getDriverJobsWithCollectorStatusByDate(
-            String username, LocalDate date) {
 
+    public List<DriverJobWithCollectorStatusDTO> getDriverJobsWithCollectorStatusByDate(String username, LocalDate date) {
         return jobRotationRepository.findDriverJobsWithCollectorStatusByDate(username, date);
     }
-    @Scheduled(cron = "0 0 * * * *") // mỗi giờ đầu tiên: 0:00, 1:00, 2:00,...
+
+    @Scheduled(cron = "0 0 * * * *")
     public void autoFailExpiredJobs() {
         int affected = jobRotationRepository.updateLateJobRotations();
         System.out.println("Updated " + affected + " job rotations to LATE status.");
     }
 
-
+    @Transactional
     public MarkCompletionResponse markJobCompleted(MarkCompletionRequest request, String expectedRole) {
         MarkCompletionResponse response = new MarkCompletionResponse();
-        try {
-            if (request.getJobRotationId() == null) {
-                MarkCompletionResponse errorResponse = new MarkCompletionResponse();
-                errorResponse.setSuccess(false);
-                errorResponse.setMessage("Job rotation ID không được để trống");
-                return response;
-            }
-            Optional<JobRotation> jobRotationOpt = jobRotationRepository.findById(request.getJobRotationId());
 
-            if (!jobRotationOpt.isPresent()) {
-                response.setSuccess(false);
-                response.setMessage("Không tìm thấy công việc với ID: " + request.getJobRotationId());
-                return response;
-            }
-            JobRotation jobRotation = jobRotationOpt.get();
-            if (!expectedRole.equals(jobRotation.getRole())) {
-                response.setSuccess(false);
-                response.setMessage("Chỉ " + expectedRole.toLowerCase() + " mới có thể thực hiện hành động này");
-                return response;
-            }
-
-            if (!("ASSIGNED".equals(jobRotation.getStatus()))) {
-                response.setSuccess(false);
-                response.setMessage("Không đủ điều kiện");
-                return response;
-            }
-
-            jobRotation.setStatus("COMPLETED");
-            jobRotation.setUpdatedAt(LocalDateTime.now());
-            jobRotationRepository.save(jobRotation);
-            response.setSuccess(true);
-            response.setMessage("Đánh dấu hoàn thành công việc thành công");
-            findDriverAndAssigned(request.getTonnage());
-        } catch (Exception e) {
+        if (request.getJobRotationId() == null) {
             response.setSuccess(false);
-            response.setMessage("Lỗi hệ thống: " + e.getMessage());
+            response.setMessage("Job rotation ID không được để trống");
+            return response;
         }
 
-        return response;
-    }
-    private void findDriverAndAssigned(Integer tonnage){
-        Optional<JobRotation> jobRotationOpt = jobRotationRepository.findDriver(tonnage);
+        Optional<JobRotation> jobRotationOpt = jobRotationRepository.findById(request.getJobRotationId());
+
+        if (jobRotationOpt.isEmpty()) {
+            response.setSuccess(false);
+            response.setMessage("Không tìm thấy công việc với ID: " + request.getJobRotationId());
+            return response;
+        }
+
         JobRotation jobRotation = jobRotationOpt.get();
-        jobRotation.setStatus("ASSIGNED");
+
+        if (!expectedRole.equals(jobRotation.getRole())) {
+            response.setSuccess(false);
+            response.setMessage("Chỉ " + expectedRole.toLowerCase() + " mới có thể thực hiện hành động này");
+            return response;
+        }
+
+        if (!"ASSIGNED".equals(jobRotation.getStatus())) {
+            response.setSuccess(false);
+            response.setMessage("Công việc không ở trạng thái ASSIGNED");
+            return response;
+        }
+
+        jobRotation.setStatus("COMPLETED");
         jobRotation.setUpdatedAt(LocalDateTime.now());
         jobRotationRepository.save(jobRotation);
 
-        //Socket
+        findDriverAndAssigned(request.getTonnage());
+
+        response.setSuccess(true);
+        response.setMessage("Đánh dấu hoàn thành công việc thành công");
+
+        return response;
     }
-    public void updateJobStatus(JobRotation jobRotation) {
-        try {
-            // Tạo data update
-            Map<String, Object> statusUpdate = new HashMap<>();
-            statusUpdate.put("jobRotationId", jobRotation.getId());
-            statusUpdate.put("status", jobRotation.getStatus());
-            statusUpdate.put("role", jobRotation.getRole());
-            statusUpdate.put("rotationDate", jobRotation.getRotationDate());
-            statusUpdate.put("updatedAt", jobRotation.getUpdatedAt());
 
+    private void findDriverAndAssigned(Integer tonnage) {
+        Optional<JobRotation> driverJobOpt = jobRotationRepository.findDriver(tonnage);
 
-        } catch (Exception e) {
-            // Log error nhưng không ảnh hưởng đến business logic
-            System.err.println("Error updating job status: " + e.getMessage());
+        if (driverJobOpt.isPresent()) {
+            JobRotation driverJob = driverJobOpt.get();
+            driverJob.setStatus("ASSIGNED");
+            driverJob.setUpdatedAt(LocalDateTime.now());
+            jobRotationRepository.save(driverJob);
+        } else {
+            System.out.println("Không tìm thấy tài xế phù hợp để phân công");
         }
     }
-    public void assignDriverForCollectionPoint(
-            Integer jobRotationId,
-            Integer smallTrucksCount, // Số xe từ request
-            LocalDate rotationDate,
-            Integer shiftId
-    ) {
-        // 1. Tính tải trọng cần thiết (1 xe = 1 tấn)
-        BigDecimal requiredTonnage = new BigDecimal(smallTrucksCount);
+    private Optional<JobRotation> findAvailableDriverWithVehicle(LocalDate date, Integer shiftId, BigDecimal requiredTonnage) {
+        // Tìm tài xế đã có nhiệm vụ cùng ca, ngày, xe chưa đầy
+        List<JobRotation> assignedDrivers = jobRotationRepository.findByRotationDateAndShiftIdAndRole(date, shiftId, "DRIVER");
 
-        // 2. Tìm xe phù hợp
-        List<Vehicle> suitableVehicles = vehicleRepository
-                .findByStatusAndTonnageGreaterThanEqual("AVAILABLE", requiredTonnage);
+        for (JobRotation job : assignedDrivers) {
+            Vehicle vehicle = vehicleRepository.findById(job.getVehicleId())
+                    .orElseThrow(() -> new RuntimeException("Không tìm thấy thông tin xe"));
 
-        // 3. Tìm tài xế đã đăng ký
-        Optional<RotationLog> driverRequest = findAvailableDriver(rotationDate,shiftId);
+            if (vehicle.getRemainingTonnage().compareTo(requiredTonnage) >= 0) {
+                return Optional.of(job); // Ưu tiên tài xế này
+            }
+        }
 
-        // 4. Tạo phân công nếu tìm thấy
-        if (driverRequest.isPresent() && !suitableVehicles.isEmpty()) {
-            createJobRotation(
-                    driverRequest.get().getStaffId(),
-                    suitableVehicles.get(0).getId(),
-                    jobRotationId
-            );
+        return Optional.empty(); // Không có tài xế phù hợp, chuyển sang tìm tài xế mới
+    }
+    @Transactional
+    public void assignVehiclesForCollection(Integer locationId, BigDecimal totalTonnage, LocalDate rotationDate, Integer shiftId) {
+        BigDecimal remaining = totalTonnage;
+
+        // Ưu tiên tài xế cũ còn xe trống
+        Optional<JobRotation> existingJob = findDriverWithAvailableVehicle(rotationDate, shiftId);
+        if (existingJob.isPresent()) {
+            JobRotation job = existingJob.get();
+            Vehicle vehicle = vehicleRepository.findById(job.getVehicleId()).orElseThrow(() -> new RuntimeException("Không tìm thấy thông tin xe"));
+
+            BigDecimal load = vehicle.getRemainingTonnage().min(remaining);
+            assignAdditionalJob(job.getStaffId(), vehicle, locationId, load, rotationDate, shiftId);
+
+            vehicle.setRemainingTonnage(vehicle.getRemainingTonnage().subtract(load));
+            vehicleRepository.save(vehicle);
+
+            remaining = remaining.subtract(load);
+        }
+
+        // Lặp tiếp cho đến khi hết rác hoặc hết tài nguyên
+        while (remaining.compareTo(BigDecimal.ZERO) > 0) {
+            List<Vehicle> vehicles = vehicleRepository.findByStatusIn(Arrays.asList("AVAILABLE", "IN_USE"));
+            vehicles.sort(Comparator.comparing(Vehicle::getRemainingTonnage).reversed());
+
+            boolean assigned = false;
+            for (Vehicle vehicle : vehicles) {
+                if (vehicle.getRemainingTonnage().compareTo(BigDecimal.ZERO) <= 0) continue;
+
+                Optional<RotationLog> driverOpt = findNewAvailableDriver(rotationDate, shiftId);
+                if (driverOpt.isEmpty()) {
+                    notificationService.sendAdminAlert("Thiếu tài xế điều xe lớn, còn lại " + remaining + " tấn chưa gom đủ");
+                    return;
+                }
+
+                BigDecimal load = vehicle.getRemainingTonnage().min(remaining);
+                assignJobToDriver(driverOpt.get(), vehicle, locationId, load, rotationDate, shiftId);
+
+                vehicle.setRemainingTonnage(vehicle.getRemainingTonnage().subtract(load));
+                vehicleRepository.save(vehicle);
+
+                remaining = remaining.subtract(load);
+                assigned = true;
+                break;
+            }
+
+            if (!assigned) {
+                notificationService.sendAdminAlert("Hết xe hoặc không đủ sức chứa, còn lại " + remaining + " tấn chưa gom đủ");
+                break;
+            }
         }
     }
-    private Optional<RotationLog> findAvailableDriver(LocalDate date,Integer shiftId) {
-        // 1. Lấy tất cả tài xế đã đăng ký ca trong ngày
-        List<RotationLog> driverRequests = rotationLogRepository
-                .findByStatusAndRotationDate("REQUEST", date);
 
-        // 2. Sắp xếp theo rating giảm dần
-        Map<Integer, Double> driverRatings = driverRatingRepository.findAll().stream()
-                .collect(Collectors.toMap(
-                        DriverRating::getDriverId,
-                        DriverRating::getAverageRating
-                ));
+    private Optional<RotationLog> findNewAvailableDriver(LocalDate date, Integer shiftId) {
+        List<RotationLog> driverRequests = rotationLogRepository.findByStatusAndRotationDate("REQUEST", date);
 
-        driverRequests.sort((a, b) -> {
-            Double ratingA = driverRatings.getOrDefault(a.getStaffId(), 0.0);
-            Double ratingB = driverRatings.getOrDefault(b.getStaffId(), 0.0);
-            return ratingB.compareTo(ratingA);
-        });
-
-        // 3. Lọc tài xế chưa có phân công trong ngày
         return driverRequests.stream()
-                .filter(request -> !isDriverAssigned(request.getStaffId(), date,shiftId))
+                .filter(request -> !jobRotationRepository.existsByStaffIdAndRotationDateAndShiftId(request.getStaffId(), date, shiftId))
+                .findFirst();
+    }
+    private Optional<JobRotation> findDriverWithAvailableVehicle(LocalDate date, Integer shiftId) {
+        List<JobRotation> jobs = jobRotationRepository.findByRotationDateAndShiftIdAndRole(date, shiftId, "DRIVER");
+
+        return jobs.stream()
+                .filter(job -> {
+                    Vehicle vehicle = vehicleRepository.findById(job.getVehicleId()).orElse(null);
+                    return vehicle != null && vehicle.getRemainingTonnage().compareTo(BigDecimal.ZERO) > 0;
+                })
                 .findFirst();
     }
 
-    // Kiểm tra tài xế đã có phân công chưa
-    private boolean isDriverAssigned(Integer driverId, LocalDate date, Integer shiftId // Thêm tham số shiftId
-    ) {
-        return jobRotationRepository.existsByStaffIdAndRotationDateAndShiftId(driverId, date,shiftId);
+
+    public List<RoutePoint> calculateOptimizedRoute(Integer vehicleId, LocalDate rotationDate, Integer shiftId) {
+        Vehicle vehicle = vehicleRepository.findById(vehicleId)
+                .orElseThrow(() -> new RuntimeException("Không tìm thấy xe"));
+
+        BigDecimal remainingCapacity = vehicle.getTonnage();
+        List<RoutePoint> optimizedPoints = new ArrayList<>();
+
+        List<Object[]> completedPoints = jobRotationRepository.findCompletedCollectionsWithTruckCounts(rotationDate, shiftId);
+
+        for (Object[] pointData : completedPoints) {
+            Integer jobRotationId = (Integer) pointData[0];
+            Integer positionId = (Integer) pointData[1];
+            Integer smallTrucksCount = (Integer) pointData[2];
+            BigDecimal totalWaste = new BigDecimal(smallTrucksCount);
+
+            JobPosition position = jobPositionRepository.findById(positionId)
+                    .orElseThrow(() -> new RuntimeException("Không tìm thấy điểm thu gom"));
+
+            while (totalWaste.compareTo(BigDecimal.ZERO) > 0 && remainingCapacity.compareTo(BigDecimal.ZERO) > 0) {
+                BigDecimal load = totalWaste.min(remainingCapacity);
+
+                optimizedPoints.add(new RoutePoint(positionId, position.getName(), position.getAddress(), load.intValue(), load));
+
+                remainingCapacity = remainingCapacity.subtract(load);
+                totalWaste = totalWaste.subtract(load);
+
+                if (remainingCapacity.compareTo(BigDecimal.ZERO) <= 0) break;
+            }
+
+            if (remainingCapacity.compareTo(BigDecimal.ZERO) <= 0) break;
+        }
+
+        return optimizedPoints;
     }
-    private void createJobRotation(
-            Integer driverId,
-            Integer vehicleId,
-            Integer collectionJobId
-    ) {
-        // 1. Lấy thông tin điểm thu gom từ job của collector
-        JobRotation collectionJob = jobRotationRepository.findById(collectionJobId)
-                .orElseThrow(() -> new RuntimeException("Không tìm thấy công việc thu gom"));
 
-        // 2. Tạo phân công cho tài xế
-        JobRotation driverJob = new JobRotation();
-        driverJob.setStaffId(driverId);
-        driverJob.setVehicleId(vehicleId);
-        driverJob.setJobPositionId(collectionJob.getJobPositionId());
-        driverJob.setRole("DRIVER");
-        driverJob.setStatus("PENDING");
-        driverJob.setRotationDate(LocalDate.now());
-        driverJob.setShiftId(collectionJob.getShiftId());
-        driverJob.setCreatedAt(LocalDateTime.now());
+    private Optional<RotationLog> findAvailableDriver(LocalDate date, Integer currentShiftId) {
+        int nextShiftId = getNextShiftId(currentShiftId);
 
-        // 3. Lưu vào DB
-        jobRotationRepository.save(driverJob);
-
-        // 4. Cập nhật trạng thái log
-        rotationLogRepository.updateStatusByStaffIdAndUpdatedAt(
-                "ASSIGNED",
-                driverId,
-                LocalDateTime.now()
+        List<RotationLog> driverRequests = rotationLogRepository.findByStatusAndRotationDateAndShiftId(
+                "REQUEST", date, nextShiftId
         );
 
-        // 5. Đánh dấu xe đã được sử dụng
-        vehicleRepository.updateStatus(vehicleId, "IN_USE");
+        Map<Integer, Double> driverRatings = driverRatingRepository.findAll().stream()
+                .collect(Collectors.toMap(DriverRating::getDriverId, DriverRating::getAverageRating, (a, b) -> b));
+
+        return driverRequests.stream()
+                .filter(request -> !jobRotationRepository.existsByStaffIdAndRotationDateAndShiftId(
+                        request.getStaffId(), date, nextShiftId
+                ))
+                .sorted(Comparator.comparingDouble((RotationLog r) ->
+                        driverRatings.getOrDefault(r.getStaffId(), 0.0)
+                ).reversed())
+                .findFirst();
+    }
+    private int getNextShiftId(int currentShiftId) {
+        List<Shift> shifts = shiftRepository.findAll(Sort.by(Sort.Direction.ASC, "id"));
+
+        if (shifts.isEmpty()) {
+            throw new RuntimeException("Chưa cấu hình ca làm việc");
+        }
+
+        for (int i = 0; i < shifts.size(); i++) {
+            if (shifts.get(i).getId().equals(currentShiftId)) {
+                return (i == shifts.size() - 1) ? shifts.get(0).getId() : shifts.get(i + 1).getId();
+            }
+        }
+
+        throw new RuntimeException("Không tìm thấy ca hiện tại trong cấu hình ca");
     }
 
+    private void assignJobToDriver(RotationLog driverLog, Vehicle vehicle, Integer locationId,
+                                   BigDecimal assignedTonnage, LocalDate rotationDate, Integer shiftId) {
+
+        JobRotation job = new JobRotation();
+        job.setStaffId(driverLog.getStaffId());
+        job.setVehicleId(vehicle.getId());
+        job.setRole("DRIVER");
+        job.setStatus("PENDING");
+        job.setRotationDate(rotationDate);
+        job.setShiftId(shiftId);
+        job.setJobPositionId(locationId);
+        job.setTonnage(assignedTonnage);
+        job.setCreatedAt(LocalDateTime.now());
+
+        jobRotationRepository.save(job);
+
+        rotationLogRepository.updateStatusByStaffIdAndUpdatedAt("ASSIGNED", driverLog.getStaffId(), LocalDateTime.now());
+    }
+    private void assignAdditionalJob(Integer staffId, Vehicle vehicle, Integer locationId,
+                                     BigDecimal assignedTonnage, LocalDate rotationDate, Integer shiftId) {
+
+        JobRotation job = new JobRotation();
+        job.setStaffId(staffId);
+        job.setVehicleId(vehicle.getId());
+        job.setJobPositionId(locationId);
+        job.setRole("DRIVER");
+        job.setStatus("PENDING");
+        job.setRotationDate(rotationDate);
+        job.setShiftId(shiftId);
+        job.setTonnage(assignedTonnage);
+        job.setCreatedAt(LocalDateTime.now());
+
+        jobRotationRepository.save(job);
+    }
 }
