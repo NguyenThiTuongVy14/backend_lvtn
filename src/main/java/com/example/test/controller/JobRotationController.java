@@ -220,12 +220,16 @@ public class JobRotationController {
         Vehicle vehicle = vehicleRepository.findById(jobs.get(0).getVehicleId())
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy thông tin xe"));
 
-        List<RoutePoint> optimizedRoute = jobRotationService.calculateOptimizedRoute(vehicle.getId(), LocalDate.now(), jobs.get(0).getShiftId());
-
+        Set<JobPosition> assignedPositions = new HashSet<>();
+        for (JobRotation job : jobs) {
+            JobPosition position = jobPositionRepository.findById(job.getJobPositionId())
+                    .orElseThrow(() -> new RuntimeException("Không tìm thấy điểm thu gom"));
+            assignedPositions.add(position);
+        }
         Map<String, Object> response = new HashMap<>();
         response.put("message", "Tối ưu hóa lộ trình thành công");
         response.put("vehicle", vehicle);
-        response.put("route", optimizedRoute);
+        response.put("positions", assignedPositions);
 
         return ResponseEntity.ok(response);
     }
