@@ -23,4 +23,6 @@ public class Vehicle {
     private String status; // Trạng thái: AVAILABLE, IN_USE
 
    private String image;
+
+   private BigDecimal remainingTonnage;
 }

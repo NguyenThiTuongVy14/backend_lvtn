@@ -3,6 +3,7 @@ package com.example.test.entity;
 import jakarta.persistence.*;
 import lombok.Data;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 
@@ -15,33 +16,35 @@ public class JobRotation {
     private Integer id;
 
     @Column(name = "staff_id")
-    private Integer staffId; // ID nhân viên được phân công
-
-    @Column(name = "position_id")
-    private Integer jobPositionId; // ID địa điểm công việc
+    private Integer staffId;
 
     @Column(name = "vehicle_id")
-    private Integer vehicleId; // ID xe
+    private Integer vehicleId;
 
-    private String role; //COLLECTOR, DRIVER
-
-    private String status; //COMPLETED, PENDING, FAIL
-
-   @Column(name = "rotation_date")
-   private LocalDate rotationDate;
-
-    @Column(name = "created_by")
-    private Integer createdBy; // ID admin tạo lịch phân công
-
-    @Column(name = "created_at")
-    private LocalDateTime createdAt; // Thời gian tạo
-
-    @Column(name = "updated_at")
-    private LocalDateTime updatedAt; // Thời gian cập nhật
+    @Column(name = "job_position_id")
+    private Integer jobPositionId;
 
     @Column(name = "shift_id")
     private Integer shiftId;
 
+    @Column(name = "rotation_date")
+    private LocalDate rotationDate;
+
+    @Column(name = "role")
+    private String role;
+
+    @Column(name = "status")
+    private String status;
+
     @Column(name = "small_trucks_count")
     private Integer smallTrucksCount;
+
+    @Column(name = "created_at")
+    private LocalDateTime createdAt = LocalDateTime.now();
+
+    @Column(name = "updated_at")
+    private LocalDateTime updatedAt;
+
+    @Column(name = "tonnage")
+    private BigDecimal tonnage;
 }

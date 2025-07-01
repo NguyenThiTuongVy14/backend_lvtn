@@ -23,5 +23,7 @@ public interface JobPositionRepository extends JpaRepository<JobPosition, Intege
     // Tìm vị trí công việc theo ID và trạng thái
     List<JobPosition> findByIdAndStatus(Integer id, String status);
 
+    String findNameById(Integer positionId);
+
     // Tìm vị trí công việc theo tải trọng yêu cầu
 }

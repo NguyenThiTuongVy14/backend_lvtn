@@ -35,4 +35,7 @@ public interface VehicleRepository extends JpaRepository<Vehicle, Integer> {
     @Transactional
     @Query("UPDATE Vehicle v SET v.status = :status WHERE v.id = :vehicleId")
     void updateStatus(@Param("vehicleId") Integer vehicleId, @Param("status") String status);
+
+
+    List<Vehicle> findByStatusIn(List<String> list);
 }
