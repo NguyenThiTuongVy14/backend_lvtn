@@ -119,33 +119,61 @@ public class JobRotationService {
         vehicles.sort(Comparator.comparing(Vehicle::getRemainingTonnage).reversed());
 
         // Bước 1: Tìm xe duy nhất đủ tải
-        for (Vehicle vehicle : vehicles) {
-            if (vehicle.getRemainingTonnage().compareTo(totalTonnage) >= 0) {
+        // Ưu tiên tìm xe có tải trọng gần nhất hoặc bằng lượng rác
+        Optional<Vehicle> optimalVehicleOpt = vehicles.stream()
+                .filter(v -> v.getRemainingTonnage().compareTo(totalTonnage) >= 0)
+                .sorted(Comparator.comparing(v -> v.getRemainingTonnage().subtract(totalTonnage).abs()))
+                .findFirst();
 
-                // Ưu tiên tìm tài xế cũ nếu có
-                Optional<JobRotation> existingJob = findDriverWithVehicle(vehicle.getId(), rotationDate, shiftId);
-                if (existingJob.isPresent()) {
-                    assignAdditionalJob(existingJob.get().getStaffId(), vehicle, locationId, totalTonnage, rotationDate, shiftId);
-                } else {
-                    Optional<RotationLog> driverOpt = findNewAvailableDriver(rotationDate, shiftId);
-                    if (driverOpt.isEmpty()) {
-                        notificationService.sendAdminAlert("Thiếu tài xế điều xe lớn, còn lại " + totalTonnage + " tấn chưa gom đủ");
-                        return;
-                    }
-                    assignJobToDriver(driverOpt.get(), vehicle, locationId, totalTonnage, rotationDate, shiftId);
+        if (optimalVehicleOpt.isPresent()) {
+            Vehicle vehicle = optimalVehicleOpt.get();
+
+            Optional<JobRotation> existingJob = findDriverWithVehicle(vehicle.getId(), rotationDate, shiftId);
+            if (existingJob.isPresent()) {
+                assignAdditionalJob(existingJob.get().getStaffId(), vehicle, locationId, totalTonnage, rotationDate, shiftId);
+            } else {
+                Optional<RotationLog> driverOpt = findNewAvailableDriver(rotationDate, shiftId);
+                if (driverOpt.isEmpty()) {
+                    notificationService.sendAdminAlert("Thiếu tài xế điều xe lớn, còn lại " + totalTonnage + " tấn chưa gom đủ");
+                    return;
                 }
-
-                vehicle.setRemainingTonnage(vehicle.getRemainingTonnage().subtract(totalTonnage));
-                vehicleRepository.save(vehicle);
-                return; // Giao hết cho 1 xe rồi, kết thúc
+                assignJobToDriver(driverOpt.get(), vehicle, locationId, totalTonnage, rotationDate, shiftId);
             }
+
+            vehicle.setRemainingTonnage(vehicle.getRemainingTonnage().subtract(totalTonnage));
+            vehicleRepository.save(vehicle);
+            return; // Đã phân công xong, kết thúc hàm
         }
 
-        // Bước 2: Không có xe nào đủ tải, phải chia nhỏ
+
+        // Bước 2: Không có xe nào đủ tải → phải chia nhỏ
         BigDecimal remaining = totalTonnage;
+
+        // 2.1 Ưu tiên chia cho xe đã có tài xế trước
+        List<JobRotation> existingJobs = jobRotationRepository.findByRotationDateAndShiftIdAndRole(rotationDate, shiftId, "DRIVER");
+        for (JobRotation job : existingJobs) {
+            if (remaining.compareTo(BigDecimal.ZERO) <= 0) break;
+
+            Vehicle vehicle = vehicleRepository.findById(job.getVehicleId()).orElse(null);
+            if (vehicle == null || vehicle.getRemainingTonnage().compareTo(BigDecimal.ZERO) <= 0) continue;
+
+            BigDecimal load = vehicle.getRemainingTonnage().min(remaining);
+            assignAdditionalJob(job.getStaffId(), vehicle, locationId, load, rotationDate, shiftId);
+
+            vehicle.setRemainingTonnage(vehicle.getRemainingTonnage().subtract(load));
+            vehicleRepository.save(vehicle);
+
+            remaining = remaining.subtract(load);
+        }
+
+        // 2.2 Tiếp tục chia cho xe chưa được phân công nếu còn dư
         for (Vehicle vehicle : vehicles) {
             if (remaining.compareTo(BigDecimal.ZERO) <= 0) break;
             if (vehicle.getRemainingTonnage().compareTo(BigDecimal.ZERO) <= 0) continue;
+
+            // Bỏ qua xe đã có tài xế
+            boolean alreadyAssigned = existingJobs.stream().anyMatch(j -> j.getVehicleId().equals(vehicle.getId()));
+            if (alreadyAssigned) continue;
 
             Optional<RotationLog> driverOpt = findNewAvailableDriver(rotationDate, shiftId);
             if (driverOpt.isEmpty()) {
@@ -166,6 +194,7 @@ public class JobRotationService {
             notificationService.sendAdminAlert("Hết xe hoặc không đủ sức chứa, còn lại " + remaining + " tấn chưa gom đủ");
         }
     }
+
 
     private Optional<JobRotation> findDriverWithVehicle(Integer vehicleId, LocalDate date, Integer shiftId) {
         return jobRotationRepository.findByVehicleIdAndRotationDateAndShiftId(vehicleId, date, shiftId);
