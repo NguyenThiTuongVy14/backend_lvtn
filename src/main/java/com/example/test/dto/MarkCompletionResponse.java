@@ -8,7 +8,7 @@ import java.time.LocalDateTime;
 public class MarkCompletionResponse {
     private boolean success;
     private String message;
-    private Integer jobRotationId;
-    private String status;
+//    private Integer jobRotationId;
+//    private String status;
     private LocalDateTime updatedAt;
 }

@@ -40,6 +40,85 @@ public class JobRotationService {
         int affected = jobRotationRepository.updateLateJobRotations();
         System.out.println("Updated " + affected + " job rotations to LATE status.");
     }
+    @Transactional
+    public MarkCompletionResponse markDriverJobCompleted(MarkCompletionRequest request, Integer driverId) {
+        MarkCompletionResponse response = new MarkCompletionResponse();
+
+        if (request.getJobRotationId() == null) {
+            response.setSuccess(false);
+            response.setMessage("Job rotation ID không được để trống");
+            return response;
+        }
+
+        Optional<JobRotation> jobRotationOpt = jobRotationRepository.findById(request.getJobRotationId());
+
+        if (jobRotationOpt.isEmpty()) {
+            response.setSuccess(false);
+            response.setMessage("Không tìm thấy công việc với ID: " + request.getJobRotationId());
+            return response;
+        }
+
+        JobRotation jobRotation = jobRotationOpt.get();
+
+        // Kiểm tra quyền sở hữu công việc
+        if (!jobRotation.getStaffId().equals(driverId)) {
+            response.setSuccess(false);
+            response.setMessage("Công việc không thuộc về tài xế hiện tại");
+            return response;
+        }
+
+        if (!"DRIVER".equals(jobRotation.getRole())) {
+            response.setSuccess(false);
+            response.setMessage("Chỉ tài xế mới có thể thực hiện hành động này");
+            return response;
+        }
+
+        if (!"PENDING".equals(jobRotation.getStatus()) && !"ASSIGNED".equals(jobRotation.getStatus())) {
+            response.setSuccess(false);
+            response.setMessage("Công việc không ở trạng thái có thể hoàn thành");
+            return response;
+        }
+
+        // Đánh dấu công việc hiện tại hoàn thành
+        jobRotation.setStatus("COMPLETED");
+        jobRotation.setUpdatedAt(LocalDateTime.now());
+        jobRotationRepository.save(jobRotation);
+
+        // Kiểm tra xem có còn công việc nào khác của tài xế trong cùng ca và ngày không
+        List<JobRotation> remainingJobs = jobRotationRepository.findByStaffIdAndRotationDateAndShiftIdAndStatusNot(
+                driverId,
+                jobRotation.getRotationDate(),
+                jobRotation.getShiftId(),
+                "COMPLETED"
+        );
+
+        // Nếu không còn công việc nào khác, reset trạng thái xe
+        if (remainingJobs.isEmpty()) {
+            Optional<Vehicle> vehicleOpt = vehicleRepository.findById(jobRotation.getVehicleId());
+            if (vehicleOpt.isPresent()) {
+                Vehicle vehicle = vehicleOpt.get();
+                // Reset lại tải trọng còn lại về tải trọng ban đầu
+                vehicle.setRemainingTonnage(vehicle.getTonnage());
+                vehicle.setStatus("AVAILABLE");
+                vehicleRepository.save(vehicle);
+
+                response.setSuccess(true);
+                response.setMessage("Đã hoàn thành tất cả công việc trong ca. Xe đã được reset về trạng thái ban đầu.");
+                response.setUpdatedAt(LocalDateTime.now());
+            } else {
+                response.setSuccess(true);
+                response.setMessage("Đã hoàn thành công việc nhưng không tìm thấy thông tin xe để reset");
+                response.setUpdatedAt(LocalDateTime.now());
+            }
+        } else {
+            response.setSuccess(true);
+            response.setMessage("Đã hoàn thành công việc tại điểm này. Còn " + remainingJobs.size() + " điểm khác cần hoàn thành.");
+            response.setUpdatedAt(LocalDateTime.now());
+        }
+
+        return response;
+    }
+
 
     @Transactional
     public MarkCompletionResponse markJobCompleted(MarkCompletionRequest request, String expectedRole) {

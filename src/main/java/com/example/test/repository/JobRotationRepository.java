@@ -208,4 +208,15 @@ public interface JobRotationRepository extends JpaRepository<JobRotation, Intege
     List<JobRotation> findByRotationDateAndShiftIdAndRole(LocalDate date, Integer shiftId, String driver);
 
     Optional<JobRotation> findByVehicleIdAndRotationDateAndShiftId(Integer vehicleId, LocalDate date, Integer shiftId);
+
+    @Query("SELECT jr FROM JobRotation jr WHERE jr.staffId = :staffId " +
+            "AND jr.rotationDate = :rotationDate " +
+            "AND jr.shiftId = :shiftId " +
+            "AND jr.status != :excludeStatus")
+    List<JobRotation> findByStaffIdAndRotationDateAndShiftIdAndStatusNot(
+            @Param("staffId") Integer staffId,
+            @Param("rotationDate") LocalDate rotationDate,
+            @Param("shiftId") Integer shiftId,
+            @Param("excludeStatus") String excludeStatus
+    );
 }

@@ -203,8 +203,22 @@ public class JobRotationController {
             return ResponseEntity.badRequest().body(new ErrorMessage("Thiếu thông tin jobRotationId hoặc tonnage"));
         }
 
-        MarkCompletionResponse response = jobRotationService.markJobCompleted(request, "DRIVER");
-        return response.isSuccess() ? ResponseEntity.ok(response) : ResponseEntity.badRequest().body(response);
+        try {
+            // Lấy thông tin user hiện tại
+            String username = SecurityContextHolder.getContext().getAuthentication().getName();
+            Staff currentDriver = staffRepository.findByUserName(username);
+
+            if (currentDriver == null) {
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                        .body(new ErrorMessage("Không tìm thấy thông tin tài xế"));
+            }
+
+            MarkCompletionResponse response = jobRotationService.markDriverJobCompleted(request, currentDriver.getId());
+            return response.isSuccess() ? ResponseEntity.ok(response) : ResponseEntity.badRequest().body(response);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(new ErrorMessage("Lỗi hệ thống: " + e.getMessage()));
+        }
     }
 
     @GetMapping("/driver/optimized-routes")
