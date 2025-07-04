@@ -7,6 +7,7 @@ import org.springframework.context.annotation.Configuration;
 
 import javax.annotation.PostConstruct;
 import java.io.FileInputStream;
+import java.io.IOException;
 
 @Configuration
 public class FirebaseConfig {
@@ -14,8 +15,14 @@ public class FirebaseConfig {
     @PostConstruct
     public void initFirebase() {
         try {
-            FileInputStream serviceAccount =
-                    new FileInputStream("src/main/resources/firebase-service-account.json");
+            // Đọc đường dẫn từ biến môi trường FIREBASE_CREDENTIAL_PATH
+            String firebasePath = System.getenv("FIREBASE_CREDENTIAL_PATH");
+
+            if (firebasePath == null || firebasePath.isEmpty()) {
+                throw new RuntimeException("FIREBASE_CREDENTIAL_PATH environment variable is not set");
+            }
+
+            FileInputStream serviceAccount = new FileInputStream(firebasePath);
 
             FirebaseOptions options = FirebaseOptions.builder()
                     .setCredentials(GoogleCredentials.fromStream(serviceAccount))
@@ -23,10 +30,11 @@ public class FirebaseConfig {
 
             if (FirebaseApp.getApps().isEmpty()) {
                 FirebaseApp.initializeApp(options);
-                System.out.println("✅ Firebase Initialized");
+                System.out.println("✅ Firebase Initialized from " + firebasePath);
             }
 
-        } catch (Exception e) {
+        } catch (IOException e) {
+            System.err.println("❌ Failed to initialize Firebase: " + e.getMessage());
             e.printStackTrace();
         }
     }
