@@ -11,9 +11,9 @@ public class NotificationRequest {
     // Constructors
     public NotificationRequest() {}
 
-    public NotificationRequest(String token, String tiltle, String body) {
+    public NotificationRequest(String token, String title, String body) {
         this.fcm_token = token;
-        this.title = tiltle;
+        this.title = title;
         this.body = body;
     }
 
