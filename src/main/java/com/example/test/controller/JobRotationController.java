@@ -263,9 +263,12 @@ public class JobRotationController {
             for (Object[] pointData : collectionPoints) {
                 Integer jobRotationId = (Integer) pointData[0];
                 Integer positionId = (Integer) pointData[1];
-                Integer smallTrucksCount = (Integer) pointData[2]; // Số xe rác nhỏ
+                Integer smallTrucksCount = (Integer) pointData[2] ; // Số xe rác nhỏ
                 BigDecimal wasteWeight = new BigDecimal(smallTrucksCount); // 1 xe = 1 tấn
 
+                if (smallTrucksCount == null) {
+                    smallTrucksCount = 0; // or continue; to skip this point
+                }
                 if (remainingCapacity.compareTo(wasteWeight) >= 0) {
                     JobPosition position = jobPositionRepository.findById(positionId)
                             .orElseThrow(() -> new RuntimeException("Không tìm thấy điểm thu gom"));
