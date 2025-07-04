@@ -14,6 +14,7 @@ public class Notification {
     private Integer id;
 
     private String content;
+    private String title;
 
     @Column(name = "created_at")
     private LocalDateTime createdAt;
