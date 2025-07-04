@@ -20,6 +20,6 @@ public class NotificationController {
                 notificationRequest.getTitle(),
                 notificationRequest.getBody()
         );
-        return "✅ Đã gửi thông báo tới thiết bị.";
+        return "✅ Đã gửi thông báo tới thiết bị. "+notificationRequest.getFcm_token();
     }
 }
