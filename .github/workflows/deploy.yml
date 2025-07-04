@@ -23,8 +23,12 @@ jobs:
           password: ${{ secrets.DOCKER_PASSWORD }}
 
       - name: Build and push Docker image
+        env:
+          FIREBASE_KEY_BASE64: ${{ secrets.FIREBASE_KEY_BASE64 }}
         run: |
-          docker build -t meo14/backend-springboot:latest .
+          docker build \
+            --build-arg FIREBASE_KEY_BASE64="$FIREBASE_KEY_BASE64" \
+            -t meo14/backend-springboot:latest .
           docker push meo14/backend-springboot:latest
 
       - name: Trigger Deploy on Render
