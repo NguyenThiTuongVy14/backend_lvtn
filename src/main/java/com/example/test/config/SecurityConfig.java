@@ -143,7 +143,9 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET,"/api/shifts")
                         .hasAnyAuthority("COLLECTOR", "DRIVER", "ADMIN")
                         //fcm
-                        .requestMatchers(HttpMethod.POST,"/api/fcm/**")
+                        .requestMatchers(HttpMethod.GET,"/api/notifications/**")
+                        .hasAnyAuthority("COLLECTOR", "DRIVER", "ADMIN")
+                        .requestMatchers(HttpMethod.POST,"/api/notifications/**")
                         .hasAnyAuthority("COLLECTOR", "DRIVER", "ADMIN")
                         // Tất cả endpoints khác - chỉ ADMIN
                         .anyRequest().hasAuthority("ADMIN")

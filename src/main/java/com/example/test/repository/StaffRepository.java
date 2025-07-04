@@ -117,4 +117,6 @@ public interface StaffRepository extends JpaRepository<Staff, Integer> {
 
     // Lấy Staff theo email và status
     Optional<Staff> findByEmailAndStatus(String email, String status);
+
+    Staff findIdByUserName(String username);
 }
