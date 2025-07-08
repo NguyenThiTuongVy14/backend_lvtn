@@ -9,7 +9,7 @@ import javax.annotation.PostConstruct;
 import java.io.FileInputStream;
 import java.io.IOException;
 
-//@Configuration
+@Configuration
 public class FirebaseConfig {
 
     @PostConstruct
