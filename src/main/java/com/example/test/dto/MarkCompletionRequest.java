@@ -7,5 +7,4 @@ import java.math.BigDecimal;
 @Data
 public class MarkCompletionRequest {
     private Integer jobRotationId;
-    private Integer tonnage;
 }

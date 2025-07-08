@@ -13,18 +13,18 @@ import org.springframework.web.socket.config.annotation.WebSocketMessageBrokerCo
 @EnableWebSocketMessageBroker
 public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
-    @Autowired
-    private WebSocketAuthInterceptor authInterceptor;
+//    @Autowired
+//    private WebSocketAuthInterceptor authInterceptor;
 
-    @Override
-    public void configureClientInboundChannel(ChannelRegistration registration) {
-        registration.interceptors(authInterceptor);
-    }
+//    @Override
+//    public void configureClientInboundChannel(ChannelRegistration registration) {
+//        registration.interceptors(authInterceptor);
+//    }
 
     @Override
     public void registerStompEndpoints(StompEndpointRegistry registry) {
         registry.addEndpoint("/ws")
-                .setAllowedOrigins("*")
+                .setAllowedOriginPatterns("http://127.0.0.1:8000", "http://localhost:8080","*")
                 .withSockJS();
     }
 

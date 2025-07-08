@@ -27,6 +27,9 @@ public class JobRotation {
     @Column(name = "shift_id")
     private Integer shiftId;
 
+    @Column(name = "collection_request_id")
+    private Integer collectionRequestId;
+
     @Column(name = "rotation_date")
     private LocalDate rotationDate;
 
@@ -47,4 +50,7 @@ public class JobRotation {
 
     @Column(name = "tonnage")
     private BigDecimal tonnage;
+
+    @JoinColumn(name = "vehicle_id")
+    private Integer vehicle;
 }

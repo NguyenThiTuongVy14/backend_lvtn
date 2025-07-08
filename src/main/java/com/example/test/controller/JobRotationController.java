@@ -179,6 +179,9 @@ public class JobRotationController {
         if (jobOpt.isEmpty() || !jobOpt.get().getStaffId().equals(collector.getId())) {
             return ResponseEntity.badRequest().body(new ErrorMessage("Công việc không hợp lệ hoặc không thuộc về bạn"));
         }
+        if (jobOpt.get().getStatus().equals("COMPLETED")) {
+            return ResponseEntity.badRequest().body(new ErrorMessage("Công việc này đã được hoàn thành"));
+        }
 
         JobRotation job = jobOpt.get();
         job.setSmallTrucksCount(request.getSmallTrucksCount());
@@ -190,16 +193,19 @@ public class JobRotationController {
         BigDecimal tonnagePerSmallTruck = new BigDecimal("0.5"); // 500kg
         BigDecimal totalCollectedTonnage = tonnagePerSmallTruck.multiply(new BigDecimal(request.getSmallTrucksCount()));
 
+        // Gửi thông báo WebSocket
+        messagingTemplate.convertAndSend("/topic/job-updates",
+                new JobCollectorCompletedMessage(job.getId(), job.getStaffId(), "COMPLETED", totalCollectedTonnage));
         // Điều xe lớn
         jobRotationService.assignVehiclesForCollection(job.getJobPositionId(), totalCollectedTonnage, job.getRotationDate(), job.getShiftId());
 
         return ResponseEntity.ok(new ResponseMessage("Đã hoàn thành " + request.getSmallTrucksCount() + " xe đẩy nhỏ (~" + totalCollectedTonnage + " tấn)"));
     }
 
-
+    private record JobCollectorCompletedMessage(Integer jobId, Integer staffId, String status, BigDecimal totalTonnage) {}
     @PostMapping("/driver/completed")
     public ResponseEntity<?> driverMarkCompleted(@RequestBody MarkCompletionRequest request) {
-        if (request.getJobRotationId() == null || request.getTonnage() == null) {
+        if (request.getJobRotationId() == null) {
             return ResponseEntity.badRequest().body(new ErrorMessage("Thiếu thông tin jobRotationId hoặc tonnage"));
         }
 
