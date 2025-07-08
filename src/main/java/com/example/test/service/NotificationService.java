@@ -7,6 +7,7 @@ import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.util.Optional;
 
 @Service
 public class NotificationService {
@@ -22,6 +23,17 @@ public class NotificationService {
 
     public List<Notification> getNotificationsByUserId(Integer userId) {
         return notificationRepository.findByUserIdOrderByCreatedAtDesc(userId);
+    }
+
+    public boolean markAsRead(Integer id) {
+        Optional<Notification> optional = notificationRepository.findById(id);
+        if (optional.isPresent()) {
+            Notification notification = optional.get();
+            notification.setIsRead(true);
+            notificationRepository.save(notification);
+            return true;
+        }
+        return false;
     }
 
 }
