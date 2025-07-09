@@ -237,22 +237,24 @@ public class JobRotationController {
             return ResponseEntity.ok(new ResponseMessage("Không có công việc cần thực hiện hôm nay"));
         }
 
-        Vehicle vehicle = vehicleRepository.findById(jobs.get(0).getVehicleId())
-                .orElseThrow(() -> new RuntimeException("Không tìm thấy thông tin xe"));
+        List<DriverRouteResponse> optimizedRoutes = new ArrayList<>();
 
-        Set<JobPosition> assignedPositions = new HashSet<>();
         for (JobRotation job : jobs) {
+            Vehicle vehicle = vehicleRepository.findById(job.getVehicleId())
+                    .orElseThrow(() -> new RuntimeException("Không tìm thấy thông tin xe với id: " + job.getVehicleId()));
             JobPosition position = jobPositionRepository.findById(job.getJobPositionId())
-                    .orElseThrow(() -> new RuntimeException("Không tìm thấy điểm thu gom"));
-            assignedPositions.add(position);
+                    .orElseThrow(() -> new RuntimeException("Không tìm thấy điểm thu gom với id: " + job.getJobPositionId()));
+
+            optimizedRoutes.add(new DriverRouteResponse(job.getId(), vehicle, position));
         }
+
         Map<String, Object> response = new HashMap<>();
         response.put("message", "Tối ưu hóa lộ trình thành công");
-        response.put("vehicle", vehicle);
-        response.put("positions", assignedPositions);
+        response.put("routes", optimizedRoutes);
 
         return ResponseEntity.ok(response);
     }
+
     // Các record và class hỗ trợ
     private record ResponseMessage(String message, Object data) {
         ResponseMessage(String message) {

@@ -1,24 +1,16 @@
 package com.example.test.dto;
 
 import com.example.test.entity.JobPosition;
+import com.example.test.entity.Vehicle;
+import lombok.AllArgsConstructor;
 import lombok.Data;
+import lombok.NoArgsConstructor;
 
-import java.math.BigDecimal;
-import java.util.List;
-
+@AllArgsConstructor
+@NoArgsConstructor
 @Data
 public class DriverRouteResponse {
-    private String message;
-    private String licensePlate;
-    private BigDecimal vehicleCapacity;
-    private BigDecimal remainingCapacity;
-    private List<RoutePoint> optimizedPoints;
-    public DriverRouteResponse(String message, String licensePlate, BigDecimal vehicleCapacity,
-                               BigDecimal remainingCapacity, List<RoutePoint> optimizedPoints) {
-        this.message = message;
-        this.licensePlate = licensePlate;
-        this.vehicleCapacity = vehicleCapacity;
-        this.remainingCapacity = remainingCapacity;
-        this.optimizedPoints = optimizedPoints;
-    }
+    private Integer jobRotationId;
+    private Vehicle vehicle;
+    private JobPosition position;
 }
