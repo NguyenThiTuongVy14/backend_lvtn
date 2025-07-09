@@ -76,7 +76,7 @@ public interface JobRotationRepository extends JpaRepository<JobRotation, Intege
         sh.end_time
     FROM t_job_rotation jr
     JOIN t_user s ON jr.staff_id = s.id
-    JOIN t_job_position jp ON jr.position_id = jp.id
+    JOIN t_job_position jp ON jr.job_position_id = jp.id
     JOIN t_shift sh ON jr.shift_id = sh.id
     LEFT JOIN t_vehicle v ON jr.vehicle_id = v.id
     WHERE s.user_name = :userName
