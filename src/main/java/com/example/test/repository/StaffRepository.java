@@ -99,7 +99,7 @@ public interface StaffRepository extends JpaRepository<Staff, Integer> {
     // ==== NATIVE QUERY METHODS (nếu cần thiết) ====
 
     // Lấy tên Authority bằng Native Query
-    @Query(value = "SELECT a.name FROM t_staff s JOIN t_authority a ON s.authority_id = a.id WHERE s.user_name = :userName",
+    @Query(value = "SELECT a.name FROM t_user s JOIN t_authority a ON s.authority_id = a.id WHERE s.user_name = :userName",
             nativeQuery = true)
     String findAuthorityNameByUserNameNative(@Param("userName") String userName);
 
