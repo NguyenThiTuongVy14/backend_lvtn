@@ -1,11 +1,23 @@
 package com.example.test.service;
 
 
+import com.example.test.entity.FCMToken;
+import com.example.test.repository.FcmRepository;
 import com.google.firebase.messaging.*;
+import lombok.NoArgsConstructor;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+
+import java.util.List;
 
 @Service
 public class FirebaseMessagingService {
+    @Autowired
+    private final FcmRepository fcmRepository;
+
+    public FirebaseMessagingService(FcmRepository fcmRepository) {
+        this.fcmRepository = fcmRepository;
+    }
 
     public void sendNotificationToToken(String fcmToken, String title, String body) {
         try {
@@ -29,6 +41,12 @@ public class FirebaseMessagingService {
 
         } catch (FirebaseMessagingException e) {
             System.err.println("❌ Error sending FCM: " + e.getMessage());
+        }
+    }
+    public void sendToAllTokensByStaffId(Integer staffId, String title, String body) {
+        List<FCMToken> tokens = fcmRepository.findByStaffId(staffId);
+        for (FCMToken token : tokens) {
+            sendNotificationToToken(token.getToken(), title, body);
         }
     }
 }

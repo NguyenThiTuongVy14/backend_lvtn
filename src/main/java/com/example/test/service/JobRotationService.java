@@ -32,7 +32,7 @@ public class JobRotationService {
     private final ShiftRepository shiftRepository;
     private final SimpMessagingTemplate messagingTemplate;
     private final StaffRepository staffRepository;
-
+    private final FirebaseMessagingService firebaseMessagingService;
     public List<JobRotationDetailDTO> getMyJobRotationsByDate(String userName, LocalDate date) {
         return jobRotationRepository.findByUserNameAndDate(userName, date);
     }
@@ -173,6 +173,7 @@ public class JobRotationService {
             Optional<JobRotation> existingJob = findDriverWithVehicle(vehicle.getId(), rotationDate, shiftId);
             if (existingJob.isPresent()) {
                 assignAdditionalJob(existingJob.get().getStaffId(), vehicle, locationId, totalTonnage, rotationDate, shiftId);
+                firebaseMessagingService.sendToAllTokensByStaffId(existingJob.get().getStaffId(), "Công việc mới", "Bạn được giao tại điểm #" + locationId);
                 messagingTemplate.convertAndSend("/topic/job-updates",
                         new JobAssignedToDriverMessage(existingJob.get().getId(), vehicle.getId(), "PENDING"));
             } else {
@@ -182,6 +183,7 @@ public class JobRotationService {
                     return;
                 }
                 assignJobToDriver(driverOpt.get(), vehicle, locationId, totalTonnage, rotationDate, shiftId);
+                firebaseMessagingService.sendToAllTokensByStaffId(driverOpt.get().getStaffId(), "Công việc mới", "Bạn được giao tại điểm #" + locationId);
 //                messagingTemplate.convertAndSend("/topic/job-updates",
 //                        new JobAssignedToDriverMessage(existingJob.get().getId(), vehicle.getId(), "ASSIGNED"));
             }

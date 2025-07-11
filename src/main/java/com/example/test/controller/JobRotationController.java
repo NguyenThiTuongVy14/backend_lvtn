@@ -195,14 +195,14 @@ public class JobRotationController {
 
         // Gửi thông báo WebSocket
         messagingTemplate.convertAndSend("/topic/job-updates",
-                new JobCollectorCompletedMessage(job.getId(), job.getStaffId(), "COMPLETED", totalCollectedTonnage));
+                new JobCollectorCompletedMessage(job.getId(), job.getStaffId(), "COMPLETED", totalCollectedTonnage,staffRepository.findAuthorityNameByUserNameNative(username)));
         // Điều xe lớn
         jobRotationService.assignVehiclesForCollection(job.getJobPositionId(), totalCollectedTonnage, job.getRotationDate(), job.getShiftId());
 
         return ResponseEntity.ok(new ResponseMessage("Đã hoàn thành " + request.getSmallTrucksCount() + " xe đẩy nhỏ (~" + totalCollectedTonnage + " tấn)"));
     }
 
-    private record JobCollectorCompletedMessage(Integer jobId, Integer staffId, String status, BigDecimal totalTonnage) {}
+    private record JobCollectorCompletedMessage(Integer jobId, Integer staffId, String status, BigDecimal totalTonnage,String roleCollector ) {}
     @PostMapping("/driver/completed")
     public ResponseEntity<?> driverMarkCompleted(@RequestBody MarkCompletionRequest request) {
         if (request.getJobRotationId() == null) {
