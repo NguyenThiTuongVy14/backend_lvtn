@@ -6,9 +6,11 @@ import com.example.test.entity.FCMToken;
 import com.example.test.entity.Staff;
 import com.example.test.repository.FcmRepository;
 import com.example.test.repository.StaffRepository;
+import com.example.test.service.MailService;
 import com.example.test.service.StaffDetailsService;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
+import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -18,8 +20,10 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;
 
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.Date;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/auth")
@@ -29,16 +33,18 @@ public class AuthController {
     private final StaffDetailsService staffDetailsService;
     private final StaffRepository  staffRepository;
     private final FcmRepository fcmRepository;
+    private final MailService mailService;
     @Value("${jwt.secret}")
     private String jwtSecret;
     @Value("${jwt.expiration}")
     private long jwtExpirationMs;
 
-    public AuthController(AuthenticationManager authenticationManager, StaffDetailsService staffDetailsService, StaffRepository staffRepository, FcmRepository fcmRepository) {
+    public AuthController(AuthenticationManager authenticationManager, StaffDetailsService staffDetailsService, StaffRepository staffRepository, FcmRepository fcmRepository, MailService mailService) {
         this.authenticationManager = authenticationManager;
         this.staffDetailsService = staffDetailsService;
         this.staffRepository = staffRepository;
         this.fcmRepository = fcmRepository;
+        this.mailService = mailService;
     }
 
     @PostMapping("/login")
@@ -75,6 +81,34 @@ public class AuthController {
         SecurityContextHolder.clearContext();
         return ResponseEntity.ok("{\"message\": \"Logout successfully\"}");
     }
+
+
+    @PostMapping("/forgot-password")
+    public ResponseEntity<?> forgotPassword(@RequestBody Map<String, Object> body) {
+        String username = (String) body.get("username");
+        Staff staff = staffRepository.findByUserName(username);
+
+        if (staff != null) {
+            String email = staff.getEmail();
+            if (email == null || email.isEmpty()) {
+                return ResponseEntity.badRequest().body("Tài khoản không có email");
+            }
+            UserDetails userDetails = staffDetailsService.loadUserByUsername(username);
+            String jwt = generateJwtToken(userDetails);
+            mailService.sendResetPasswordLink(email, jwt);
+
+            return ResponseEntity.ok("Đã gửi email đến: " + email);
+        }
+        return ResponseEntity.badRequest().body("{\"error\": \"Invalid username\"}");
+    }
+
+    @GetMapping("/open-app/reset-password")
+    public void redirectToApp(@RequestParam("token") String token, HttpServletResponse response) throws IOException {
+        String deepLink = "colector://reset-password?token=" + token;
+        response.sendRedirect(deepLink);
+    }
+
+
 
 
     private String generateJwtToken(UserDetails userDetails) {

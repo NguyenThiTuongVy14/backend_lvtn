@@ -62,7 +62,7 @@ public class SecurityConfig {
                 .csrf(csrf -> csrf.disable())
                 .authorizeHttpRequests(auth -> auth
                         // Public endpoints
-                        .requestMatchers("/api/auth/login", "/api/auth/logout").permitAll()
+                        .requestMatchers("/api/auth/login", "/api/auth/logout", "/api/auth/forgot-password", "/api/auth/open-app/reset-password").permitAll()
                         .requestMatchers("/ws/**").permitAll()
 
                         // Collection Points endpoints
