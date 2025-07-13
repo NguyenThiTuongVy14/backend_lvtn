@@ -119,4 +119,7 @@ public interface StaffRepository extends JpaRepository<Staff, Integer> {
     Optional<Staff> findByEmailAndStatus(String email, String status);
 
     Staff findIdByUserName(String username);
+
+    @Query("SELECT fullName FROM Staff where  id = :staffId")
+    String findFullNameById(Integer staffId);
 }

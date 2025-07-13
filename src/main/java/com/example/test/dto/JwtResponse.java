@@ -1,13 +1,15 @@
 package com.example.test.dto;
 
+import lombok.Data;
 import lombok.Getter;
 
-@Getter
+@Data
 public class JwtResponse {
-    private final String token;
+    private  String token;
+    private Integer role;
 
-    public JwtResponse(String token) {
-        this.token = token;
+    public JwtResponse() {
+
     }
 
 }

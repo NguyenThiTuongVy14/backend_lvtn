@@ -2,6 +2,10 @@ package com.example.test.controller;
 
 import com.example.test.dto.JwtResponse;
 import com.example.test.dto.LoginRequest;
+import com.example.test.entity.FCMToken;
+import com.example.test.entity.Staff;
+import com.example.test.repository.FcmRepository;
+import com.example.test.repository.StaffRepository;
 import com.example.test.service.StaffDetailsService;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
@@ -23,14 +27,18 @@ public class AuthController {
 
     private final AuthenticationManager authenticationManager;
     private final StaffDetailsService staffDetailsService;
+    private final StaffRepository  staffRepository;
+    private final FcmRepository fcmRepository;
     @Value("${jwt.secret}")
     private String jwtSecret;
     @Value("${jwt.expiration}")
     private long jwtExpirationMs;
 
-    public AuthController(AuthenticationManager authenticationManager, StaffDetailsService staffDetailsService) {
+    public AuthController(AuthenticationManager authenticationManager, StaffDetailsService staffDetailsService, StaffRepository staffRepository, FcmRepository fcmRepository) {
         this.authenticationManager = authenticationManager;
         this.staffDetailsService = staffDetailsService;
+        this.staffRepository = staffRepository;
+        this.fcmRepository = fcmRepository;
     }
 
     @PostMapping("/login")
@@ -42,8 +50,22 @@ public class AuthController {
 
             UserDetails userDetails = staffDetailsService.loadUserByUsername(loginRequest.getUsername());
             String jwt = generateJwtToken(userDetails);
+            Staff staff = staffRepository.findByUserName(loginRequest.getUsername());
+            if (loginRequest.getRole()==staff.getAuthorityId()){
 
-            return ResponseEntity.ok(new JwtResponse(jwt));
+            if (loginRequest.getFcmToken() != null && !loginRequest.getFcmToken().isEmpty()) {
+                FCMToken token = new FCMToken();
+                token.setStaffId(staff.getId());
+                token.setToken(loginRequest.getFcmToken());
+                fcmRepository.save(token);
+            }
+            JwtResponse response= new JwtResponse();
+            response.setToken(jwt);
+            response.setRole(staff.getAuthorityId());
+            return ResponseEntity.ok(response);}
+        else {
+            return ResponseEntity.badRequest().body("{\"error\":\"Permission denied\"}");
+            }
         } catch (Exception e) {
             return ResponseEntity.status(401).body("{\"error\": \"Invalid username or password\"}");
         }

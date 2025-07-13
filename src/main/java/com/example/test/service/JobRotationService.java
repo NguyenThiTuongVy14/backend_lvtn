@@ -1,5 +1,6 @@
 package com.example.test.service;
 
+import com.example.test.controller.JobRotationController;
 import com.example.test.dto.*;
 import com.example.test.entity.*;
 import com.example.test.repository.*;
@@ -174,8 +175,15 @@ public class JobRotationService {
             if (existingJob.isPresent()) {
                 assignAdditionalJob(existingJob.get().getStaffId(), vehicle, locationId, totalTonnage, rotationDate, shiftId);
                 firebaseMessagingService.sendToAllTokensByStaffId(existingJob.get().getStaffId(), "Công việc mới", "Bạn được giao tại điểm #" + locationId);
-                messagingTemplate.convertAndSend("/topic/job-updates",
-                        new JobAssignedToDriverMessage(existingJob.get().getId(), vehicle.getId(), "PENDING"));
+//                messagingTemplate.convertAndSend("/topic/job-updates",
+//                        new JobAssignedToDriverMessage(existingJob.get().getId(), vehicle.getId(), "PENDING"));
+
+                Shift shift = shiftRepository.findById(shiftId).get();
+                String name=staffRepository.findFullNameById(existingJob.get().getStaffId());
+                JobPosition position=jobPositionRepository.findById(existingJob.get().getJobPositionId()).get();
+
+                messagingTemplate.convertAndSend("/topic/assigned-driver",
+                        new AssignedDriver(existingJob.get().getId(),"PENDING",totalTonnage,shift,name,position));
             } else {
                 Optional<RotationLog> driverOpt = findNewAvailableDriver(rotationDate, shiftId);
                 if (driverOpt.isEmpty()) {
@@ -186,6 +194,12 @@ public class JobRotationService {
                 firebaseMessagingService.sendToAllTokensByStaffId(driverOpt.get().getStaffId(), "Công việc mới", "Bạn được giao tại điểm #" + locationId);
 //                messagingTemplate.convertAndSend("/topic/job-updates",
 //                        new JobAssignedToDriverMessage(existingJob.get().getId(), vehicle.getId(), "ASSIGNED"));
+                Shift shift = shiftRepository.findById(shiftId).get();
+                String name=staffRepository.findFullNameById(existingJob.get().getStaffId());
+                JobPosition position=jobPositionRepository.findById(existingJob.get().getJobPositionId()).get();
+
+                messagingTemplate.convertAndSend("/topic/assigned-driver",
+                        new AssignedDriver(existingJob.get().getId(),"PENDING",totalTonnage,shift,name,position));
             }
 
             vehicle.setRemainingTonnage(vehicle.getRemainingTonnage().subtract(totalTonnage));
@@ -243,8 +257,8 @@ public class JobRotationService {
         }
     }
 
-    private record JobAssignedToDriverMessage(Integer jobId, Integer vehicleId, String status) {}
     private record VehicleStatusUpdatedMessage(Integer vehicleId, String status, BigDecimal remainingTonnage) {}
+    private record AssignedDriver(Integer jobId,String status, BigDecimal totalTonnage,Shift shift,String name,JobPosition jobPosition) {}
 
     private Optional<JobRotation> findDriverWithVehicle(Integer vehicleId, LocalDate date, Integer shiftId) {
         List<JobRotation> results = jobRotationRepository.findByVehicleIdAndRotationDateAndShiftId(vehicleId, date, shiftId);
