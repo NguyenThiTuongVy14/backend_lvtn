@@ -62,7 +62,7 @@ public class SecurityConfig {
                 .csrf(csrf -> csrf.disable())
                 .authorizeHttpRequests(auth -> auth
                         // Public endpoints
-                        .requestMatchers("/api/auth/login", "/api/auth/logout", "/api/auth/forgot-password", "/api/auth/open-app/reset-password").permitAll()
+                        .requestMatchers("/api/auth/login", "/api/auth/logout", "/api/auth/forgot-password", "/api/auth/open-app/reset-password", "/.well-known/assetlinks.json" ).permitAll()
                         .requestMatchers("/ws/**").permitAll()
 
                         // Collection Points endpoints
@@ -172,7 +172,7 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOrigins(List.of("http://127.0.0.1:8000","http://localhost:8000","http://localhost:8081")); // Cho phép tất cả nguồn gốc (hoặc chỉ định IP/cổng cụ thể)
+        configuration.setAllowedOrigins(List.of("http://127.0.0.1:8000","http://localhost:8000","http://localhost:8081","http://localhost:8080")); // Cho phép tất cả nguồn gốc (hoặc chỉ định IP/cổng cụ thể)
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(List.of("*"));
         configuration.setAllowCredentials(true);

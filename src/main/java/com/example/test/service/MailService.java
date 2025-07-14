@@ -21,14 +21,10 @@ public class MailService {
 
     public void sendResetPasswordLink(String toEmail, String token) {
         String subject = "Yêu cầu đặt lại mật khẩu";
-        String deepLink = "colector://reset-password?token=" + token;
         String redirectLink = "https://backend-springboot-latest.onrender.com/api/open-app/reset-password?token=" + token;
-
         String content = "<p>Chúng tôi nhận được yêu cầu đặt lại mật khẩu.</p>"
                 + "<p>Nhấn vào liên kết sau để đặt lại mật khẩu:</p>"
-                + "<p><a href=\"" + redirectLink + "\">Đặt lại mật khẩu</a></p>"
-                + "<p>Hoặc mở app với link: <b>" + deepLink + "</b></p>"
-                + "<p>Nếu bạn không yêu cầu, hãy bỏ qua email này.</p>";
+                + "<p><a href=\"" + redirectLink + "\">Đặt lại mật khẩu</a></p>";
 
         MimeMessage message = mailSender.createMimeMessage();
 
