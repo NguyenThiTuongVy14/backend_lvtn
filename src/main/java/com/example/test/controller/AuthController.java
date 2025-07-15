@@ -59,16 +59,17 @@ public class AuthController {
             Staff staff = staffRepository.findByUserName(loginRequest.getUsername());
             if (loginRequest.getRole()==staff.getAuthorityId()){
 
-            if (loginRequest.getFcmToken() != null && !loginRequest.getFcmToken().isEmpty()) {
-                FCMToken token = new FCMToken();
-                token.setStaffId(staff.getId());
-                token.setToken(loginRequest.getFcmToken());
-                fcmRepository.save(token);
+                if (loginRequest.getFcmToken() != null && !loginRequest.getFcmToken().isEmpty() && !fcmRepository.existsByToken(loginRequest.getFcmToken())) {
+                    FCMToken token = new FCMToken();
+                    token.setStaffId(staff.getId());
+                    token.setToken(loginRequest.getFcmToken());
+                    fcmRepository.save(token);
+                }
+                JwtResponse response= new JwtResponse();
+                response.setToken(jwt);
+                response.setRole(staff.getAuthorityId());
+                return ResponseEntity.ok(response);
             }
-            JwtResponse response= new JwtResponse();
-            response.setToken(jwt);
-            response.setRole(staff.getAuthorityId());
-            return ResponseEntity.ok(response);}
         else {
             return ResponseEntity.badRequest().body("{\"error\":\"Permission denied\"}");
             }
