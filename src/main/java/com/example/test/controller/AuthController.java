@@ -108,11 +108,7 @@ public class AuthController {
 //        response.sendRedirect(deepLink);
 //    }
 
-    @GetMapping("/deeplink/reset-password")
-    public ResponseEntity<Void> redirectToApp(@RequestParam(required = false) String token) {
-        // Trả về 200 OK (Android mới nhận)
-        return ResponseEntity.ok().build();
-    }
+
 
 
 
