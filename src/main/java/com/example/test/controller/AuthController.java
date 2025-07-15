@@ -102,11 +102,11 @@ public class AuthController {
         return ResponseEntity.badRequest().body("{\"error\": \"Invalid username\"}");
     }
 
-    @GetMapping("/open-app/reset-password")
-    public void redirectToApp(@RequestParam("token") String token, HttpServletResponse response) throws IOException {
-        String deepLink = "colector://reset-password?token=" + token;
-        response.sendRedirect(deepLink);
-    }
+//    @GetMapping("/open-app/reset-password")
+//    public void redirectToApp(@RequestParam("token") String token, HttpServletResponse response) throws IOException {
+//        String deepLink = "colector://reset-password?token=" + token;
+//        response.sendRedirect(deepLink);
+//    }
 
     @GetMapping("/deeplink/reset-password")
     public ResponseEntity<Void> redirectToApp(@RequestParam(required = false) String token) {
