@@ -193,7 +193,7 @@ public class JobRotationController {
         BigDecimal tonnagePerSmallTruck = new BigDecimal("0.5"); // 500kg
         BigDecimal totalCollectedTonnage = tonnagePerSmallTruck.multiply(new BigDecimal(request.getSmallTrucksCount()));
         Optional<JobPosition> position = jobPositionRepository.findById(job.getJobPositionId());
-        if (position.isPresent()) {
+        if (!position.isPresent()) {
             return ResponseEntity.badRequest().body(new ErrorMessage("Không tìm thấy vị trí công việc"));
         }
         // Gửi thông báo WebSocket
