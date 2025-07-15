@@ -157,13 +157,12 @@ public class JobRotationService {
         return Optional.empty(); // Không có tài xế phù hợp, chuyển sang tìm tài xế mới
     }
     @Transactional
-    public void     assignVehiclesForCollection(Integer locationId, BigDecimal totalTonnage, LocalDate rotationDate, Integer shiftId) {
+    public void assignVehiclesForCollection(Integer locationId, BigDecimal totalTonnage, LocalDate rotationDate, Integer shiftId) {
 
         List<Vehicle> vehicles = vehicleRepository.findByStatusIn(Arrays.asList("AVAILABLE", "IN_USE"));
         vehicles.sort(Comparator.comparing(Vehicle::getRemainingTonnage).reversed());
 
         // Bước 1: Tìm xe duy nhất đủ tải
-        // Ưu tiên tìm xe có tải trọng gần nhất hoặc bằng lượng rác
         Optional<Vehicle> optimalVehicleOpt = vehicles.stream()
                 .filter(v -> v.getRemainingTonnage().compareTo(totalTonnage) >= 0)
                 .sorted(Comparator.comparing(v -> v.getRemainingTonnage().subtract(totalTonnage).abs()))
@@ -172,34 +171,51 @@ public class JobRotationService {
         if (optimalVehicleOpt.isPresent()) {
             Vehicle vehicle = optimalVehicleOpt.get();
             Optional<JobRotation> existingJob = findDriverWithVehicle(vehicle.getId(), rotationDate, shiftId);
-            if (existingJob.isPresent()) {
-                assignAdditionalJob(existingJob.get().getStaffId(), vehicle, locationId, totalTonnage, rotationDate, shiftId);
-                firebaseMessagingService.sendToAllTokensByStaffId(existingJob.get().getStaffId(), "Công việc mới", "Bạn được giao tại điểm #" + locationId);
-//                messagingTemplate.convertAndSend("/topic/job-updates",
-//                        new JobAssignedToDriverMessage(existingJob.get().getId(), vehicle.getId(), "PENDING"));
 
-                Shift shift = shiftRepository.findById(shiftId).get();
-                String name=staffRepository.findFullNameById(existingJob.get().getStaffId());
-                JobPosition position=jobPositionRepository.findById(existingJob.get().getJobPositionId()).get();
+            if (existingJob.isPresent()) {
+                JobRotation jobRotation = existingJob.get();
+                JobRotation newJob = assignAdditionalJob(jobRotation.getStaffId(), vehicle, locationId, totalTonnage, rotationDate, shiftId);
+                firebaseMessagingService.sendToAllTokensByStaffId(jobRotation.getStaffId(), "Công việc mới", "Bạn được giao tại điểm #" + locationId);
+
+                Shift shift = shiftRepository.findById(shiftId)
+                        .orElseThrow(() -> new RuntimeException("Không tìm thấy ca làm việc id = " + shiftId));
+
+                String name = staffRepository.findFullNameById(jobRotation.getStaffId());
+                if (name == null) {
+                    notificationService.sendAdminAlert("Không tìm thấy tên nhân viên id = " + jobRotation.getStaffId());
+                    return;
+                }
+
+                JobPosition position = jobPositionRepository.findById(jobRotation.getJobPositionId())
+                        .orElseThrow(() -> new RuntimeException("Không tìm thấy vị trí công việc id = " + jobRotation.getJobPositionId()));
 
                 messagingTemplate.convertAndSend("/topic/assigned-driver",
-                        new AssignedDriver(existingJob.get().getId(),"PENDING",totalTonnage,shift,name,position));
+                        new AssignedDriver(newJob.getId(), "PENDING", totalTonnage, shift, name, position));
             } else {
                 Optional<RotationLog> driverOpt = findNewAvailableDriver(rotationDate, shiftId);
                 if (driverOpt.isEmpty()) {
                     notificationService.sendAdminAlert("Thiếu tài xế điều xe lớn, còn lại " + totalTonnage + " tấn chưa gom đủ");
                     return;
                 }
-                assignJobToDriver(driverOpt.get(), vehicle, locationId, totalTonnage, rotationDate, shiftId);
-                firebaseMessagingService.sendToAllTokensByStaffId(driverOpt.get().getStaffId(), "Công việc mới", "Bạn được giao tại điểm #" + locationId);
-//                messagingTemplate.convertAndSend("/topic/job-updates",
-//                        new JobAssignedToDriverMessage(existingJob.get().getId(), vehicle.getId(), "ASSIGNED"));
-                Shift shift = shiftRepository.findById(shiftId).get();
-                String name=staffRepository.findFullNameById(existingJob.get().getStaffId());
-                JobPosition position=jobPositionRepository.findById(existingJob.get().getJobPositionId()).get();
+
+                RotationLog driver = driverOpt.get();
+                JobRotation newJobRotation = assignJobToDriver(driver, vehicle, locationId, totalTonnage, rotationDate, shiftId);
+                firebaseMessagingService.sendToAllTokensByStaffId(driver.getStaffId(), "Công việc mới", "Bạn được giao tại điểm #" + locationId);
+
+                Shift shift = shiftRepository.findById(shiftId)
+                        .orElseThrow(() -> new RuntimeException("Không tìm thấy ca làm việc id = " + shiftId));
+
+                String name = staffRepository.findFullNameById(driver.getStaffId());
+                if (name == null) {
+                    notificationService.sendAdminAlert("Không tìm thấy tên nhân viên id = " + driver.getStaffId());
+                    return;
+                }
+
+                JobPosition position = jobPositionRepository.findById(newJobRotation.getJobPositionId())
+                        .orElseThrow(() -> new RuntimeException("Không tìm thấy vị trí công việc id = " + newJobRotation.getJobPositionId()));
 
                 messagingTemplate.convertAndSend("/topic/assigned-driver",
-                        new AssignedDriver(existingJob.get().getId(),"PENDING",totalTonnage,shift,name,position));
+                        new AssignedDriver(newJobRotation.getId(), "PENDING", totalTonnage, shift, name, position));
             }
 
             vehicle.setRemainingTonnage(vehicle.getRemainingTonnage().subtract(totalTonnage));
@@ -208,6 +224,7 @@ public class JobRotationService {
                     new VehicleStatusUpdatedMessage(vehicle.getId(), vehicle.getStatus(), vehicle.getRemainingTonnage()));
             return;
         }
+
         // Bước 2: Không có xe nào đủ tải → phải chia nhỏ
         BigDecimal remaining = totalTonnage;
 
@@ -220,10 +237,29 @@ public class JobRotationService {
             if (vehicle == null || vehicle.getRemainingTonnage().compareTo(BigDecimal.ZERO) <= 0) continue;
 
             BigDecimal load = vehicle.getRemainingTonnage().min(remaining);
-            assignAdditionalJob(job.getStaffId(), vehicle, locationId, load, rotationDate, shiftId);
+            JobRotation newJob = assignAdditionalJob(job.getStaffId(), vehicle, locationId, load, rotationDate, shiftId);
+
+            // Send Firebase notification
+            firebaseMessagingService.sendToAllTokensByStaffId(job.getStaffId(), "Công việc mới", "Bạn được giao tại điểm #" + locationId);
+
+            // Send WebSocket notification
+            Shift shift = shiftRepository.findById(shiftId)
+                    .orElseThrow(() -> new RuntimeException("Không tìm thấy ca làm việc id = " + shiftId));
+
+            String name = staffRepository.findFullNameById(job.getStaffId());
+            if (name != null) {
+                JobPosition position = jobPositionRepository.findById(job.getJobPositionId())
+                        .orElseThrow(() -> new RuntimeException("Không tìm thấy vị trí công việc id = " + job.getJobPositionId()));
+
+                messagingTemplate.convertAndSend("/topic/assigned-driver",
+                        new AssignedDriver(newJob.getId(), "PENDING", load, shift, name, position));
+            }
 
             vehicle.setRemainingTonnage(vehicle.getRemainingTonnage().subtract(load));
             vehicleRepository.save(vehicle);
+
+            messagingTemplate.convertAndSend("/topic/vehicle-updates",
+                    new VehicleStatusUpdatedMessage(vehicle.getId(), vehicle.getStatus(), vehicle.getRemainingTonnage()));
 
             remaining = remaining.subtract(load);
         }
@@ -244,10 +280,29 @@ public class JobRotationService {
             }
 
             BigDecimal load = vehicle.getRemainingTonnage().min(remaining);
-            assignJobToDriver(driverOpt.get(), vehicle, locationId, load, rotationDate, shiftId);
+            JobRotation newJob = assignJobToDriver(driverOpt.get(), vehicle, locationId, load, rotationDate, shiftId);
+
+            // Send Firebase notification
+            firebaseMessagingService.sendToAllTokensByStaffId(driverOpt.get().getStaffId(), "Công việc mới", "Bạn được giao tại điểm #" + locationId);
+
+            // Send WebSocket notification
+            Shift shift = shiftRepository.findById(shiftId)
+                    .orElseThrow(() -> new RuntimeException("Không tìm thấy ca làm việc id = " + shiftId));
+
+            String name = staffRepository.findFullNameById(driverOpt.get().getStaffId());
+            if (name != null) {
+                JobPosition position = jobPositionRepository.findById(newJob.getJobPositionId())
+                        .orElseThrow(() -> new RuntimeException("Không tìm thấy vị trí công việc id = " + newJob.getJobPositionId()));
+
+                messagingTemplate.convertAndSend("/topic/assigned-driver",
+                        new AssignedDriver(newJob.getId(), "PENDING", load, shift, name, position));
+            }
 
             vehicle.setRemainingTonnage(vehicle.getRemainingTonnage().subtract(load));
             vehicleRepository.save(vehicle);
+
+            messagingTemplate.convertAndSend("/topic/vehicle-updates",
+                    new VehicleStatusUpdatedMessage(vehicle.getId(), vehicle.getStatus(), vehicle.getRemainingTonnage()));
 
             remaining = remaining.subtract(load);
         }
@@ -370,8 +425,8 @@ public class JobRotationService {
         throw new RuntimeException("Không tìm thấy ca hiện tại trong cấu hình ca");
     }
 
-    private void  assignJobToDriver(RotationLog driverLog, Vehicle vehicle, Integer locationId,
-                                   BigDecimal assignedTonnage, LocalDate rotationDate, Integer shiftId) {
+    private JobRotation assignJobToDriver(RotationLog driverLog, Vehicle vehicle, Integer locationId,
+                                          BigDecimal assignedTonnage, LocalDate rotationDate, Integer shiftId) {
         String username = SecurityContextHolder.getContext().getAuthentication().getName();
         Staff collector = staffRepository.findByUserName(username);
         JobRotation job = new JobRotation();
@@ -385,12 +440,15 @@ public class JobRotationService {
         job.setTonnage(assignedTonnage);
         job.setCreatedAt(LocalDateTime.now());
         job.setCollectionRequestId(collector.getId());
-        jobRotationRepository.save(job);
+        JobRotation savedJob = jobRotationRepository.save(job);
 
         rotationLogRepository.updateStatusByStaffIdAndUpdatedAt("ASSIGNED", driverLog.getStaffId(), LocalDateTime.now());
+
+        return savedJob; // Return the saved job rotation
     }
-    private void assignAdditionalJob(Integer staffId, Vehicle vehicle, Integer locationId,
-                                     BigDecimal assignedTonnage, LocalDate rotationDate, Integer shiftId) {
+
+    private JobRotation assignAdditionalJob(Integer staffId, Vehicle vehicle, Integer locationId,
+                                            BigDecimal assignedTonnage, LocalDate rotationDate, Integer shiftId) {
 
         JobRotation job = new JobRotation();
         job.setStaffId(staffId);
@@ -403,6 +461,6 @@ public class JobRotationService {
         job.setTonnage(assignedTonnage);
         job.setCreatedAt(LocalDateTime.now());
 
-        jobRotationRepository.save(job);
+        return jobRotationRepository.save(job); // Return the saved job rotation
     }
 }
