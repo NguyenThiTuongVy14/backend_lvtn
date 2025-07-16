@@ -98,8 +98,8 @@ public class JobRotationService {
                 jobRotation.getShiftId(),
                 "COMPLETED"
         );
-        messagingTemplate.convertAndSend("/topic/job-updates",
-                new JobDriverCompletedMessage(jobRotation.getId(), driverId, "COMPLETED"));
+        messagingTemplate.convertAndSend("/topic/assigned-driver",
+                new JobDriverCompletedMessage(jobRotation.getId(), staffRepository.findFullNameById(driverId),driverId, "COMPLETED",jobRotation.getVehicleId(),jobRotation.getShiftId(),jobRotation.getTonnage(),jobRotation.getRotationDate()));
         // Nếu không còn công việc nào khác, reset trạng thái xe
         if (remainingJobs.isEmpty()) {
             Optional<Vehicle> vehicleOpt = vehicleRepository.findById(jobRotation.getVehicleId());
@@ -127,7 +127,7 @@ public class JobRotationService {
 
         return response;
     }
-    private record JobDriverCompletedMessage(Integer jobId, Integer driverId, String status) {}
+    private record JobDriverCompletedMessage(Integer jobId, String name,Integer driverId, String status,Integer vehicleId,Integer shiftId, BigDecimal remainingTonnage,LocalDate rotationDate) {}
 
     private void findDriverAndAssigned(Integer tonnage) {
         Optional<JobRotation> driverJobOpt = jobRotationRepository.findDriver(tonnage);
@@ -190,7 +190,7 @@ public class JobRotationService {
                         .orElseThrow(() -> new RuntimeException("Không tìm thấy vị trí công việc id = " + jobRotation.getJobPositionId()));
 
                 messagingTemplate.convertAndSend("/topic/assigned-driver",
-                        new AssignedDriver(newJob.getId(), "PENDING", totalTonnage, shift, name, position));
+                        new AssignedDriver(newJob.getId(), "PENDING", totalTonnage, shift, name, position,newJob.getVehicleId()));
             } else {
                 Optional<RotationLog> driverOpt = findNewAvailableDriver(rotationDate, shiftId);
                 if (driverOpt.isEmpty()) {
@@ -215,7 +215,7 @@ public class JobRotationService {
                         .orElseThrow(() -> new RuntimeException("Không tìm thấy vị trí công việc id = " + newJobRotation.getJobPositionId()));
 
                 messagingTemplate.convertAndSend("/topic/assigned-driver",
-                        new AssignedDriver(newJobRotation.getId(), "PENDING", totalTonnage, shift, name, position));
+                        new AssignedDriver(newJobRotation.getId(), "PENDING", totalTonnage, shift, name, position,newJobRotation.getVehicleId()));
             }
 
             vehicle.setRemainingTonnage(vehicle.getRemainingTonnage().subtract(totalTonnage));
@@ -252,7 +252,7 @@ public class JobRotationService {
                         .orElseThrow(() -> new RuntimeException("Không tìm thấy vị trí công việc id = " + job.getJobPositionId()));
 
                 messagingTemplate.convertAndSend("/topic/assigned-driver",
-                        new AssignedDriver(newJob.getId(), "PENDING", load, shift, name, position));
+                        new AssignedDriver(newJob.getId(), "PENDING", load, shift, name, position,newJob.getVehicleId()));
             }
 
             vehicle.setRemainingTonnage(vehicle.getRemainingTonnage().subtract(load));
@@ -295,7 +295,7 @@ public class JobRotationService {
                         .orElseThrow(() -> new RuntimeException("Không tìm thấy vị trí công việc id = " + newJob.getJobPositionId()));
 
                 messagingTemplate.convertAndSend("/topic/assigned-driver",
-                        new AssignedDriver(newJob.getId(), "PENDING", load, shift, name, position));
+                        new AssignedDriver(newJob.getId(), "PENDING", load, shift, name, position,newJob.getVehicleId()));
             }
 
             vehicle.setRemainingTonnage(vehicle.getRemainingTonnage().subtract(load));
@@ -313,7 +313,7 @@ public class JobRotationService {
     }
 
     private record VehicleStatusUpdatedMessage(Integer vehicleId, String status, BigDecimal remainingTonnage) {}
-    private record AssignedDriver(Integer jobId,String status, BigDecimal totalTonnage,Shift shift,String name,JobPosition jobPosition) {}
+    private record AssignedDriver(Integer jobId,String status, BigDecimal totalTonnage,Shift shift,String name,JobPosition jobPosition,Integer vehicleId) {}
 
     private Optional<JobRotation> findDriverWithVehicle(Integer vehicleId, LocalDate date, Integer shiftId) {
         List<JobRotation> results = jobRotationRepository.findByVehicleIdAndRotationDateAndShiftId(vehicleId, date, shiftId);
