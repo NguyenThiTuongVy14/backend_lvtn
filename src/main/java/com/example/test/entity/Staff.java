@@ -3,6 +3,8 @@ package com.example.test.entity;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
+
+import java.sql.Timestamp;
 import java.time.LocalDate;
 
 @Setter
@@ -50,4 +52,10 @@ public class Staff {
 
     @Column(name = "authority_id")
     private Integer authorityId;
+
+
+    private String image;
+    private String otp;
+    @Column(name = "otp_expired_at")
+    private Timestamp OtpExpiredAt;
 }
