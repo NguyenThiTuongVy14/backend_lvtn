@@ -11,6 +11,7 @@ import com.example.test.service.StaffDetailsService;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
 import jakarta.servlet.http.HttpServletResponse;
+import jakarta.transaction.Transactional;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -22,6 +23,8 @@ import org.springframework.web.bind.annotation.*;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.sql.Timestamp;
+import java.time.LocalDateTime;
 import java.util.Date;
 import java.util.Map;
 
@@ -77,10 +80,16 @@ public class AuthController {
             return ResponseEntity.status(401).body("{\"error\": \"Invalid username or password\"}");
         }
     }
+    @Transactional
     @PostMapping("/logout")
-    public ResponseEntity<?> logout() {
+    public ResponseEntity<?> logout(@RequestBody Map<String, String> request) {
+        String fcmToken = request.get("fcmToken");
+        if (fcmToken != null && !fcmToken.isEmpty()) {
+            fcmRepository.deleteByToken(fcmToken);
+        }
+
         SecurityContextHolder.clearContext();
-        return ResponseEntity.ok("{\"message\": \"Logout successfully\"}");
+        return ResponseEntity.ok(Map.of("message", "Logout successfully"));
     }
 
 
@@ -94,14 +103,54 @@ public class AuthController {
             if (email == null || email.isEmpty()) {
                 return ResponseEntity.badRequest().body("Tài khoản không có email");
             }
-            UserDetails userDetails = staffDetailsService.loadUserByUsername(username);
-            String jwt = generateJwtToken(userDetails);
-            mailService.sendResetPasswordLink(email, jwt);
 
-            return ResponseEntity.ok("Đã gửi email đến: " + email);
+            // Tạo mã OTP ngẫu nhiên
+            String otp = String.valueOf((int) (Math.random() * 900000) + 100000);
+            LocalDateTime expiredAt = LocalDateTime.now().plusMinutes(10);
+
+            // Cập nhật vào bảng t_user
+            staff.setOtp(otp);
+            staff.setOtpExpiredAt(Timestamp.valueOf(expiredAt));
+            staffRepository.save(staff);
+
+            // Gửi mail
+            mailService.sendOtpMail(email, otp);
+
+            return ResponseEntity.ok("Đã gửi OTP đến email: " + email);
         }
-        return ResponseEntity.badRequest().body("{\"error\": \"Invalid username\"}");
+
+        return ResponseEntity.badRequest().body("{\"error\": \"Tài khoản không tồn tại\"}");
     }
+//    @PostMapping("/reset-password")
+//    public ResponseEntity<?> resetPassword(@RequestBody Map<String, Object> body) {
+//        String username = (String) body.get("username");
+//        String otp = (String) body.get("otp");
+//        String newPassword = (String) body.get("newPassword");
+//
+//        Staff staff = staffRepository.findByUserName(username);
+//
+//        if (staff == null) {
+//            return ResponseEntity.badRequest().body("{\"error\": \"Tài khoản không tồn tại\"}");
+//        }
+//
+//        if (staff.getOtp() == null || !staff.getOtp().equals(otp)) {
+//            return ResponseEntity.badRequest().body("{\"error\": \"OTP không đúng\"}");
+//        }
+//
+//        if (staff.getOtpExpiredAt() == null || staff.getOtpExpiredAt().toLocalDateTime().isBefore(LocalDateTime.now())) {
+//            return ResponseEntity.badRequest().body("{\"error\": \"OTP đã hết hạn\"}");
+//        }
+//
+//        staff.setPassword(passwordEncoder.encode(newPassword));
+//        staff.setOtp(null);
+//        staff.setOtpExpiredAt(null);
+//        staffRepository.save(staff);
+//
+//        return ResponseEntity.ok("Đổi mật khẩu thành công");
+//    }
+
+
+
 
 //    @GetMapping("/open-app/reset-password")
 //    public void redirectToApp(@RequestParam("token") String token, HttpServletResponse response) throws IOException {
