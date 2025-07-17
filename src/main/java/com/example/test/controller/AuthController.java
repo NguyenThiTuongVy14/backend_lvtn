@@ -19,6 +19,8 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
 
 import java.io.IOException;
@@ -41,13 +43,15 @@ public class AuthController {
     private String jwtSecret;
     @Value("${jwt.expiration}")
     private long jwtExpirationMs;
+    private final PasswordEncoder passwordEncoder;
 
-    public AuthController(AuthenticationManager authenticationManager, StaffDetailsService staffDetailsService, StaffRepository staffRepository, FcmRepository fcmRepository, MailService mailService) {
+    public AuthController(AuthenticationManager authenticationManager, StaffDetailsService staffDetailsService, StaffRepository staffRepository, FcmRepository fcmRepository, MailService mailService, PasswordEncoder passwordEncoder) {
         this.authenticationManager = authenticationManager;
         this.staffDetailsService = staffDetailsService;
         this.staffRepository = staffRepository;
         this.fcmRepository = fcmRepository;
         this.mailService = mailService;
+        this.passwordEncoder = passwordEncoder;
     }
 
     @PostMapping("/login")
@@ -98,65 +102,72 @@ public class AuthController {
         String username = (String) body.get("username");
         Staff staff = staffRepository.findByUserName(username);
 
-        if (staff != null) {
-            String email = staff.getEmail();
-            if (email == null || email.isEmpty()) {
-                return ResponseEntity.badRequest().body("Tài khoản không có email");
-            }
-
-            // Tạo mã OTP ngẫu nhiên
-            String otp = String.valueOf((int) (Math.random() * 900000) + 100000);
-            LocalDateTime expiredAt = LocalDateTime.now().plusMinutes(10);
-
-            // Cập nhật vào bảng t_user
-            staff.setOtp(otp);
-            staff.setOtpExpiredAt(Timestamp.valueOf(expiredAt));
-            staffRepository.save(staff);
-
-            // Gửi mail
-            mailService.sendOtpMail(email, otp);
-
-            return ResponseEntity.ok("Đã gửi OTP đến email: " + email);
+        if (staff == null) {
+            return ResponseEntity.badRequest().body(Map.of("error", "Tài khoản không tồn tại"));
         }
 
-        return ResponseEntity.badRequest().body("{\"error\": \"Tài khoản không tồn tại\"}");
+        if (staff.getEmail() == null || staff.getEmail().isEmpty()) {
+            return ResponseEntity.badRequest().body(Map.of("error", "Tài khoản không có email"));
+        }
+
+        String otp = String.valueOf((int) (Math.random() * 90000) + 10000);
+        LocalDateTime expiredAt = LocalDateTime.now().plusMinutes(10);
+
+        staff.setOtp(otp);
+        staff.setOtpExpiredAt(Timestamp.valueOf(expiredAt));
+        staffRepository.save(staff);
+
+        mailService.sendOtpMail(staff.getEmail(), otp);
+        return ResponseEntity.ok(Map.of("message", "Đã gửi OTP đến email"));
     }
-//    @PostMapping("/reset-password")
-//    public ResponseEntity<?> resetPassword(@RequestBody Map<String, Object> body) {
-//        String username = (String) body.get("username");
-//        String otp = (String) body.get("otp");
-//        String newPassword = (String) body.get("newPassword");
-//
-//        Staff staff = staffRepository.findByUserName(username);
-//
-//        if (staff == null) {
-//            return ResponseEntity.badRequest().body("{\"error\": \"Tài khoản không tồn tại\"}");
-//        }
-//
-//        if (staff.getOtp() == null || !staff.getOtp().equals(otp)) {
-//            return ResponseEntity.badRequest().body("{\"error\": \"OTP không đúng\"}");
-//        }
-//
-//        if (staff.getOtpExpiredAt() == null || staff.getOtpExpiredAt().toLocalDateTime().isBefore(LocalDateTime.now())) {
-//            return ResponseEntity.badRequest().body("{\"error\": \"OTP đã hết hạn\"}");
-//        }
-//
-//        staff.setPassword(passwordEncoder.encode(newPassword));
-//        staff.setOtp(null);
-//        staff.setOtpExpiredAt(null);
-//        staffRepository.save(staff);
-//
-//        return ResponseEntity.ok("Đổi mật khẩu thành công");
-//    }
 
+    @PostMapping("/verify-otp")
+    public ResponseEntity<?> verifyOtp(@RequestBody Map<String, Object> body) {
+        String username = (String) body.get("username");
+        String otp = (String) body.get("otp");
 
+        Staff staff = staffRepository.findByUserName(username);
+        if (staff == null) {
+            return ResponseEntity.badRequest().body(Map.of("error", "Tài khoản không tồn tại"));
+        }
 
+        if (!otp.equals(staff.getOtp())) {
+            return ResponseEntity.badRequest().body(Map.of("error", "OTP không đúng"));
+        }
 
-//    @GetMapping("/open-app/reset-password")
-//    public void redirectToApp(@RequestParam("token") String token, HttpServletResponse response) throws IOException {
-//        String deepLink = "colector://reset-password?token=" + token;
-//        response.sendRedirect(deepLink);
-//    }
+        if (staff.getOtpExpiredAt().toLocalDateTime().isBefore(LocalDateTime.now())) {
+            return ResponseEntity.badRequest().body(Map.of("error", "OTP đã hết hạn"));
+        }
+
+        return ResponseEntity.ok(Map.of("message", "Xác thực OTP thành công"));
+    }
+    @PostMapping("/reset-password")
+    public ResponseEntity<?> resetPassword(@RequestBody Map<String, Object> body) {
+        String username = (String) body.get("username");
+        String otp = (String) body.get("otp");
+        String newPassword = (String) body.get("newPassword");
+
+        Staff staff = staffRepository.findByUserName(username);
+        if (staff == null) {
+            return ResponseEntity.badRequest().body(Map.of("error", "Tài khoản không tồn tại"));
+        }
+
+        if (!otp.equals(staff.getOtp())) {
+            return ResponseEntity.badRequest().body(Map.of("error", "OTP không đúng"));
+        }
+
+        if (staff.getOtpExpiredAt().toLocalDateTime().isBefore(LocalDateTime.now())) {
+            return ResponseEntity.badRequest().body(Map.of("error", "OTP đã hết hạn"));
+        }
+
+        staff.setPassword(passwordEncoder.encode(newPassword));
+        staff.setOtp(null);
+        staff.setOtpExpiredAt(null);
+        staffRepository.save(staff);
+
+        return ResponseEntity.ok(Map.of("message", "Đổi mật khẩu thành công"));
+    }
+
 
 
 

@@ -16,28 +16,25 @@ public class MailService {
     @Autowired
     private JavaMailSender mailSender;
 
-    @Value("${spring.mail.username}")
-    private String fromEmail; // Email gửi đi
-
-    public void sendResetPasswordLink(String toEmail, String token) {
-        String subject = "Yêu cầu đặt lại mật khẩu";
-        String redirectLink = "https://backend-springboot-latest.onrender.com/api/open-app/reset-password?token=" + token;
-        String content = "<p>Chúng tôi nhận được yêu cầu đặt lại mật khẩu.</p>"
-                + "<p>Nhấn vào liên kết sau để đặt lại mật khẩu:</p>"
-                + "<p><a href=\"" + redirectLink + "\">Đặt lại mật khẩu</a></p>";
-
-        MimeMessage message = mailSender.createMimeMessage();
-
+    public void sendOtpMail(String toEmail, String otp) {
         try {
-            MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
+            MimeMessage message = mailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(message, "utf-8");
+
+            String subject = "Mã OTP Khôi Phục Mật Khẩu";
+            String content = "<p>Xin chào,</p>"
+                    + "<p>Mã OTP của bạn là: <b>" + otp + "</b></p>"
+                    + "<p>Mã này có hiệu lực trong 10 phút.</p>"
+                    + "<p>Vui lòng không chia sẻ mã này cho bất kỳ ai.</p>"
+                    + "<hr><p>Hệ thống tự động, vui lòng không trả lời email này.</p>";
+
             helper.setTo(toEmail);
             helper.setSubject(subject);
-            helper.setText(content, true); // HTML content
-            helper.setFrom(fromEmail, "GREEN HR");
+            helper.setText(content, true); // true để gửi email HTML
 
             mailSender.send(message);
-        } catch (MessagingException | UnsupportedEncodingException e) {
-            throw new RuntimeException("Gửi email thất bại", e);
+        } catch (MessagingException e) {
+            throw new RuntimeException("Lỗi gửi mail: " + e.getMessage());
         }
     }
 }
