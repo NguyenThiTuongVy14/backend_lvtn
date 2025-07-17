@@ -12,4 +12,7 @@ public interface FcmRepository extends JpaRepository<FCMToken, Integer> {
 
     @Query("SELECT COUNT(f) > 0 FROM FCMToken f WHERE f.token = :token")
     boolean existsByToken(@Param("token") String token);
+
+
+    void deleteByToken(String fcmToken);
 }
