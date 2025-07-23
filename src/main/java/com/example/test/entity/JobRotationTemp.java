@@ -8,9 +8,9 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "t_job_rotation")
+@Table(name = "t_job_rotation_temp")
 @Data
-public class JobRotation {
+public class JobRotationTemp {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Integer id;

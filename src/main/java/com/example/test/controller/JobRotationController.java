@@ -31,11 +31,12 @@ public class JobRotationController {
     private final RotationLogRepository  rotationLogRepository;
     private final JobPositionRepository jobPositionRepository;
     private final SimpMessagingTemplate messagingTemplate;
+    private final JobRotationTempRepository jobRotationTempRepository;
 
     @Autowired
     public JobRotationController(JobRotationRepository jobRotationRepository,
                                  JobRotationService jobRotationService,
-                                 StaffRepository staffRepository, ShiftRepository shiftRepository, VehicleRepository vehicleRepository, RotationLogRepository rotationLogRepository, DriverRatingRepository driverRatingRepository, JobPositionRepository jobPositionRepository, SimpMessagingTemplate messagingTemplate) {
+                                 StaffRepository staffRepository, ShiftRepository shiftRepository, VehicleRepository vehicleRepository, RotationLogRepository rotationLogRepository, DriverRatingRepository driverRatingRepository, JobPositionRepository jobPositionRepository, SimpMessagingTemplate messagingTemplate, JobRotationTempRepository jobRotationTempRepository) {
         this.jobRotationRepository = jobRotationRepository;
         this.jobRotationService = jobRotationService;
         this.staffRepository = staffRepository;
@@ -44,6 +45,7 @@ public class JobRotationController {
         this.rotationLogRepository = rotationLogRepository;
         this.jobPositionRepository = jobPositionRepository;
         this.messagingTemplate = messagingTemplate;
+        this.jobRotationTempRepository = jobRotationTempRepository;
     }
 
 
@@ -175,34 +177,34 @@ public class JobRotationController {
         String username = SecurityContextHolder.getContext().getAuthentication().getName();
         Staff collector = staffRepository.findByUserName(username);
 
-        Optional<JobRotation> jobOpt = jobRotationRepository.findById(request.getJobRotationId());
+        Optional<JobRotationTemp> jobOpt = jobRotationTempRepository.findById(request.getJobRotationId());
         if (jobOpt.isEmpty() || !jobOpt.get().getStaffId().equals(collector.getId())) {
             return ResponseEntity.badRequest().body(new ErrorMessage("Công việc không hợp lệ hoặc không thuộc về bạn"));
         }
         if (jobOpt.get().getStatus().equals("COMPLETED")) {
             return ResponseEntity.badRequest().body(new ErrorMessage("Công việc này đã được hoàn thành"));
         }
-
-        JobRotation job = jobOpt.get();
+        JobRotationTemp job = jobOpt.get();
         job.setSmallTrucksCount(request.getSmallTrucksCount());
         job.setStatus("COMPLETED");
         job.setUpdatedAt(LocalDateTime.now());
-        jobRotationRepository.save(job);
-
-        // Quy đổi số xe nhỏ ra tấn
-        BigDecimal tonnagePerSmallTruck = new BigDecimal("0.5"); // 500kg
-        BigDecimal totalCollectedTonnage = tonnagePerSmallTruck.multiply(new BigDecimal(request.getSmallTrucksCount()));
-        Optional<JobPosition> position = jobPositionRepository.findById(job.getJobPositionId());
-        if (!position.isPresent()) {
-            return ResponseEntity.badRequest().body(new ErrorMessage("Không tìm thấy vị trí công việc"));
-        }
-        // Gửi thông báo WebSocket
-        messagingTemplate.convertAndSend("/topic/job-updates",
-                new JobCollectorCompletedMessage(job.getId(), "COMPLETED", totalCollectedTonnage,position.get()));
-        // Điều xe lớn
-        jobRotationService.assignVehiclesForCollection(job.getJobPositionId(), totalCollectedTonnage, job.getRotationDate(), job.getShiftId());
-        return ResponseEntity.ok(new ResponseMessage("Đã hoàn thành " + request.getSmallTrucksCount() + " xe đẩy nhỏ (~" + totalCollectedTonnage + " tấn)"));
+        jobRotationTempRepository.save(job);
+        return ResponseEntity.ok(new ResponseMessage("Đã hoàn thành " + request.getSmallTrucksCount() + " xe đẩy nhỏ (~" + request.getSmallTrucksCount()*0.5 + " tấn)"));
     }
+
+    @GetMapping("/assign-vehicle")
+    public ResponseEntity<?> assignvehicle(){
+        int result = jobRotationService.assignAllVehicles();
+        if(result == 1){
+            return ResponseEntity.ok(new ResponseMessage("Đã hoàn thành "));
+        } else if (result == -1) {
+            return ResponseEntity.badRequest().body(new ErrorMessage("Không đủ tài xế"));
+        }
+        else
+            return ResponseEntity.badRequest().body(new ErrorMessage("Không đủ xe"));
+
+    }
+
 
     private record JobCollectorCompletedMessage(Integer jobId, String status, BigDecimal totalTonnage,JobPosition position ) {}
     @PostMapping("/driver/completed")
