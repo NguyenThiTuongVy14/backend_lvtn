@@ -4,6 +4,7 @@ import com.example.test.dto.*;
 import com.example.test.entity.*;
 import com.example.test.repository.*;
 import com.example.test.service.JobRotationService;
+import com.example.test.service.PriorityAllocatorService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
@@ -32,11 +33,12 @@ public class JobRotationController {
     private final JobPositionRepository jobPositionRepository;
     private final SimpMessagingTemplate messagingTemplate;
     private final JobRotationTempRepository jobRotationTempRepository;
+    private final PriorityAllocatorService  priorityAllocatorService;
 
     @Autowired
     public JobRotationController(JobRotationRepository jobRotationRepository,
                                  JobRotationService jobRotationService,
-                                 StaffRepository staffRepository, ShiftRepository shiftRepository, VehicleRepository vehicleRepository, RotationLogRepository rotationLogRepository, DriverRatingRepository driverRatingRepository, JobPositionRepository jobPositionRepository, SimpMessagingTemplate messagingTemplate, JobRotationTempRepository jobRotationTempRepository) {
+                                 StaffRepository staffRepository, ShiftRepository shiftRepository, VehicleRepository vehicleRepository, RotationLogRepository rotationLogRepository, DriverRatingRepository driverRatingRepository, JobPositionRepository jobPositionRepository, SimpMessagingTemplate messagingTemplate, JobRotationTempRepository jobRotationTempRepository, PriorityAllocatorService priorityAllocatorService) {
         this.jobRotationRepository = jobRotationRepository;
         this.jobRotationService = jobRotationService;
         this.staffRepository = staffRepository;
@@ -46,6 +48,7 @@ public class JobRotationController {
         this.jobPositionRepository = jobPositionRepository;
         this.messagingTemplate = messagingTemplate;
         this.jobRotationTempRepository = jobRotationTempRepository;
+        this.priorityAllocatorService = priorityAllocatorService;
     }
 
 
@@ -141,29 +144,45 @@ public class JobRotationController {
             Staff driver = staffRepository.findByUserName(username);
             Integer staffId = driver.getId();
 
+            List<String> messages = new ArrayList<>();
+
             for (DriverShiftRegistrationRequest request : requests) {
+                LocalDate date = request.getRotationDate();
+
+                // B1: Đẩy WAITLIST có carry_points cao lên trước (nếu còn slot)
+                priorityAllocatorService.promoteWaitlistIfAny(date);
+
                 for (Integer shiftId : request.getShiftId()) {
                     if (rotationLogRepository.existsByStaffIdAndShiftIdAndRotationDate(
-                            staffId, shiftId, request.getRotationDate())) {
-                        throw new IllegalStateException("Đã đăng ký ca " + shiftId +
-                                " vào ngày " + request.getRotationDate());
+                            staffId, shiftId, date)) {
+                        throw new IllegalStateException("Đã đăng ký ca " + shiftId + " vào ngày " + date);
                     }
+
+                    long currentAssigned = rotationLogRepository.countAssignedForUpdate(date);
+                    int capacity = (int) vehicleRepository.count();
 
                     RotationLog log = new RotationLog();
                     log.setStaffId(staffId);
                     log.setShiftId(shiftId);
-                    log.setStatus("REQUEST");
                     log.setRequestedAt(LocalDateTime.now());
-                    log.setRotationDate(request.getRotationDate());
+                    log.setRotationDate(date);
+
+                    if (currentAssigned < capacity) {
+                        log.setStatus("ASSIGNED");
+                        log.setUpdatedAt(LocalDateTime.now());
+                        messages.add("Ngày " + date + " (ca " + shiftId + "): ĐÃ ĐƯỢC PHÂN CÔNG.");
+                    } else {
+                        log.setStatus("WAITLIST");
+                        messages.add("Ngày " + date + " (ca " + shiftId + "): HẾT CHỖ, bạn đang ở WAITLIST.");
+                    }
 
                     rotationLogRepository.save(log);
                 }
             }
 
-            return ResponseEntity.ok(new ResponseMessage("Đăng ký ca làm việc thành công. Đang chờ xác nhận"));
+            return ResponseEntity.ok(new ResponseMessage(String.join("\n", messages)));
 
         } catch (IllegalStateException e) {
-            // rollback tự động do @Transactional
             return ResponseEntity.badRequest().body(new ErrorMessage(e.getMessage()));
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
@@ -186,6 +205,7 @@ public class JobRotationController {
         }
         JobRotationTemp job = jobOpt.get();
         job.setSmallTrucksCount(request.getSmallTrucksCount());
+        job.setTonnage(BigDecimal.valueOf(request.getSmallTrucksCount()*0.5));
         job.setStatus("COMPLETED");
         job.setUpdatedAt(LocalDateTime.now());
         jobRotationTempRepository.save(job);
@@ -193,20 +213,40 @@ public class JobRotationController {
     }
 
     @GetMapping("/assign-vehicle")
-    public ResponseEntity<?> assignvehicle(){
-        int result = jobRotationService.assignAllVehicles();
-        if(result == 1){
-            return ResponseEntity.ok(new ResponseMessage("Đã hoàn thành "));
+    public ResponseEntity<?> assignVehicle(
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
+
+        LocalDate target = (date != null) ? date : LocalDate.now();
+        int result = jobRotationService.assignAllVehicles(target);
+
+        if (result == 1) {
+            return ResponseEntity.ok(new ResponseMessage("Đã phân công xe cho tài xế ASSIGNED"));
         } else if (result == -1) {
             return ResponseEntity.badRequest().body(new ErrorMessage("Không đủ tài xế"));
-        }
-        else
+        } else {
             return ResponseEntity.badRequest().body(new ErrorMessage("Không đủ xe"));
-
+        }
     }
 
+    @GetMapping("/test-promote")
+    public ResponseEntity<?> testPromote(@RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
+        LocalDate target = (date != null) ? date : LocalDate.now();
+        priorityAllocatorService.promoteWaitlistIfAny(target);
+        return ResponseEntity.ok("Đã promote WAITLIST -> ASSIGNED cho ngày " + target);
+    }
+    @PostMapping("/test-finalize")
+    public ResponseEntity<?> testFinalize(
+            @RequestParam(required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
 
+        if (date == null) {
+            date = LocalDate.now(); // mặc định hôm nay
+        }
+        int moved = jobRotationService.finalizeDailyAssignments(date);
+        return ResponseEntity.ok(new ResponseMessage("Đã finalize " + moved + " bản ghi cho ngày " + date));
+    }
     private record JobCollectorCompletedMessage(Integer jobId, String status, BigDecimal totalTonnage,JobPosition position ) {}
+
     @PostMapping("/driver/completed")
     public ResponseEntity<?> driverMarkCompleted(@RequestBody MarkCompletionRequest request) {
         if (request.getJobRotationId() == null) {
@@ -224,6 +264,7 @@ public class JobRotationController {
             }
 
             MarkCompletionResponse response = jobRotationService.markDriverJobCompleted(request, currentDriver.getId());
+            jobRotationService.resetCarryPointsAfterCompleted(currentDriver.getId());
             return response.isSuccess() ? ResponseEntity.ok(response) : ResponseEntity.badRequest().body(response);
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)

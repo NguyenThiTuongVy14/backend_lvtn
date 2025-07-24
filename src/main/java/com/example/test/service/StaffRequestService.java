@@ -2,6 +2,7 @@ package com.example.test.service;
 
 import com.example.test.dto.StaffRegisterRequest;
 import com.example.test.entity.StaffRequest;
+import com.example.test.repository.StaffRepository;
 import com.example.test.repository.StaffRequestRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;

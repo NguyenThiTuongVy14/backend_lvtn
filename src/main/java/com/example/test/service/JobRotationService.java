@@ -33,11 +33,22 @@ public class JobRotationService {
     private final StaffRepository staffRepository;
     private final FirebaseMessagingService firebaseMessagingService;
     private final JobRotationTempRepository jobRotationTempRepository;
+    private final PriorityAllocatorService priorityAllocatorService;
 
     public List<JobRotationDetailDTO> getMyJobRotationsByDate(String userName, LocalDate date) {
         return jobRotationRepository.findByUserNameAndDate(userName, date);
     }
 
+    /**
+     * Cron 12:00 trưa hằng ngày: push WAITLIST (ưu tiên carry_points) lên ASSIGNED nếu còn slot.
+     * Phân công cho ngày mai (tuỳ bạn chỉnh).
+     */
+    @Scheduled(cron = "0 0 12 * * *", zone = "Asia/Ho_Chi_Minh")
+    @Transactional
+    public void autoPromoteAtNoon() {
+        LocalDate targetDate = LocalDate.now().plusDays(1);
+        priorityAllocatorService.promoteWaitlistIfAny(targetDate);
+    }
 
     @Scheduled(cron = "0 0 * * * *")
     public void autoFailExpiredJobs() {
@@ -130,26 +141,44 @@ public class JobRotationService {
 
     private record VehicleStatusUpdatedMessage(Integer vehicleId, String status, BigDecimal remainingTonnage) {}
 
-    public int assignAllVehicles() {
+    /**
+     * Gán xe cho những driver ASSIGNED trong ngày.
+     * Nếu dư driver → chuyển UNASSIGNED & tăng carry_points.
+     */
+    @Transactional
+    public int assignAllVehicles(LocalDate rotationDate) {
+        // 1. Lấy danh sách driver ASSIGNED (đã được chọn từ carry_points)
+        List<RotationLog> assignedDrivers = rotationLogRepository.findAssignedOrderByCarryPoints(rotationDate);
+        if (assignedDrivers.isEmpty()) return -1;
+
+        // 2. Lấy danh sách xe, sắp xếp theo remainingTonnage giảm dần
         List<Vehicle> vehicles = vehicleRepository.findAll();
         vehicles.sort((a, b) -> b.getRemainingTonnage().compareTo(a.getRemainingTonnage()));
+        if (vehicles.isEmpty()) return -2;
 
-        //Lay danh sach cac dien chua co xe va sap xep so luong rac giam dan
+        // 3. Lấy danh sách các điểm tập kết (JobRotationTemp, role = COLLECTOR)
         List<JobRotationTemp> jobRotations = jobRotationTempRepository.findByVehicleIdNullAndRole("COLLECTOR");
         jobRotations.sort((a, b) -> b.getTonnage().compareTo(a.getTonnage()));
 
-        List<RotationLog> rotationLogs = rotationLogRepository.findAll();
+        // 4. Gán xe cho từng driver ASSIGNED
+        for (int i = 0; i < assignedDrivers.size(); i++) {
+            if (i >= vehicles.size()) break; // (Thừa ra thì thoát)
+            RotationLog driver = assignedDrivers.get(i);
+            Vehicle vehicle = vehicles.get(i);
 
-        for (Vehicle vehicle : vehicles) {
-            if(!rotationLogs.isEmpty()) {
-                jobRotations.removeAll(assignRotationForVehicle(jobRotations, vehicle, rotationLogs.get(0).getId()));
-                rotationLogs.remove(0);
+            List<JobRotationTemp> bestSubset = assignRotationForVehicle(jobRotations, vehicle, driver.getStaffId());
+            jobRotations.removeAll(bestSubset);
+
+            // Nếu driver này không được gán job nào -> cộng điểm
+            if (bestSubset.isEmpty()) {
+                driver.setStatus("UNASSIGNED");
+                rotationLogRepository.save(driver);
+                staffRepository.changeCarryPoints(driver.getStaffId(), 1);
             }
-            else
-                return -1; // Không đủ tài xế
         }
 
-        if(!jobRotations.isEmpty()){
+        // 5. Nếu còn collector chưa gán -> không đủ xe
+        if (!jobRotations.isEmpty()) {
             return -2;
         }
         return 1;
@@ -157,13 +186,11 @@ public class JobRotationService {
 
     public List<JobRotationTemp> assignRotationForVehicle(List<JobRotationTemp> jobRotations, Vehicle vehicle, Integer idDriver) {
         BigDecimal capacity = vehicle.getRemainingTonnage();
-
-
         int n = jobRotations.size();
         BigDecimal bestSum = BigDecimal.ZERO;
         List<JobRotationTemp> bestSubset = new ArrayList<>();
 
-        // B2: Duyệt tất cả tập con (n nhỏ mới dùng được, ví dụ n <= 20)
+        // Tìm tập con tối ưu
         for (int mask = 0; mask < (1 << n); mask++) {
             BigDecimal currentSum = BigDecimal.ZERO;
             List<JobRotationTemp> currentSubset = new ArrayList<>();
@@ -183,7 +210,12 @@ public class JobRotationService {
             }
         }
 
-        // B3: Gán các bãi vào xe
+        // Nếu không có collector phù hợp, trả về rỗng
+        if (bestSubset.isEmpty()) {
+            return bestSubset;
+        }
+
+        // Gán các bãi vào xe cho driver
         for (JobRotationTemp job : bestSubset) {
             JobRotationTemp jobDriver = new JobRotationTemp();
             jobDriver.setVehicleId(vehicle.getId());
@@ -193,23 +225,52 @@ public class JobRotationService {
             jobDriver.setTonnage(job.getTonnage());
             jobDriver.setSmallTrucksCount(job.getSmallTrucksCount());
             jobDriver.setUpdatedAt(LocalDateTime.now());
-            jobDriver.setStaffId(job.getStaffId());
+            jobDriver.setRotationDate(job.getRotationDate());
             jobDriver.setStatus("PENDING");
             jobDriver.setStaffId(idDriver);
             jobRotationTempRepository.save(jobDriver);
         }
 
-        // B4: Trừ tải trọng còn lại
+        // Trừ tải trọng còn lại
         vehicle.setRemainingTonnage(vehicle.getRemainingTonnage().subtract(bestSum));
         vehicleRepository.save(vehicle);
         return bestSubset;
-
     }
 
+    /**
+     * Khi tài xế hoàn thành công việc -> reset carry_points = 0
+     * (Bạn gọi hàm này ở chỗ mark completed)
+     */
+    @Transactional
+    public void resetCarryPointsAfterCompleted(Integer staffId) {
+        staffRepository.resetCarryPoints(staffId);
+    }
 
+    @Transactional
+    public int finalizeDailyAssignments(LocalDate rotationDate) {
+        List<JobRotationTemp> tempJobs =
+                jobRotationTempRepository.findByRotationDate(rotationDate);
 
+        if (tempJobs.isEmpty()) return 0;
 
+        for (JobRotationTemp temp : tempJobs) {
+            JobRotation job = new JobRotation();
+            job.setStaffId(temp.getStaffId());
+            job.setJobPositionId(temp.getJobPositionId());
+            job.setVehicleId(temp.getVehicleId());
+            job.setShiftId(temp.getShiftId());
+            job.setRotationDate(rotationDate);
+            job.setTonnage(temp.getTonnage());
+            job.setRole(temp.getRole());
+            job.setStatus(temp.getStatus());
+            job.setCreatedAt(LocalDateTime.now());
+            job.setUpdatedAt(LocalDateTime.now());
 
+            jobRotationRepository.save(job);
+        }
 
+        jobRotationTempRepository.deleteAllByRotationDate(rotationDate);
+        return tempJobs.size();
+    }
 
 }

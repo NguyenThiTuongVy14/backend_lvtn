@@ -2,6 +2,7 @@ package com.example.test.repository;
 
 import com.example.test.entity.Staff;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -122,4 +123,13 @@ public interface StaffRepository extends JpaRepository<Staff, Integer> {
 
     @Query("SELECT fullName FROM Staff where  id = :staffId")
     String findFullNameById(Integer staffId);
+
+    @Modifying
+    @Query("update Staff s set s.carryPoints = s.carryPoints + :delta where s.id = :id")
+    void changeCarryPoints(@Param("id") Integer staffId, @Param("delta") int delta);
+
+    @Modifying
+    @Query("update Staff s set s.carryPoints = 0 where s.id = :id")
+    void resetCarryPoints(@Param("id") Integer staffId);
+
 }

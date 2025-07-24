@@ -58,4 +58,7 @@ public class Staff {
     private String otp;
     @Column(name = "otp_expired_at")
     private Timestamp OtpExpiredAt;
+
+    @Column(name = "carry_points", nullable = false)
+    private int carryPoints = 0;
 }
