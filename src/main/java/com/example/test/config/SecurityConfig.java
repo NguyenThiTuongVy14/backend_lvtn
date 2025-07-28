@@ -67,7 +67,7 @@ public class SecurityConfig {
                                 "/api/auth/forgot-password",
                                 "/deeplink/**",
                                 "/.well-known/assetlinks.json",
-                                "api/auth/**",
+                                "/api/auth/**",
                                 "/api/register/**",
                                 "/uploads/**",
                                 "/api/job-rotations/assign-vehicle",
