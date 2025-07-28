@@ -2,14 +2,15 @@ package com.example.test.service;
 
 import com.example.test.dto.StaffRegisterRequest;
 import com.example.test.entity.StaffRequest;
-import com.example.test.repository.StaffRepository;
 import com.example.test.repository.StaffRequestRepository;
+import com.google.common.net.InetAddresses;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.File;
 import java.io.IOException;
+import java.net.InetAddress;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.UUID;
@@ -27,9 +28,9 @@ public class StaffRequestService {
             MultipartFile cccdBack,
             MultipartFile licenseFront,
             MultipartFile licenseBack) {
-            if(staffRequestRepository.existsByEmail(req.getEmail())){
-                return false;
-            }
+        if(staffRequestRepository.existsByEmail(req.getEmail())){
+            return false;
+        }
 
         String avatarPath = saveFile(avatar, "avatar");
         String cccdFrontPath = saveFile(cccdFront, "cccdFront");
@@ -76,7 +77,10 @@ public class StaffRequestService {
                 file.transferTo(dest);
 
                 // Trả về path tương đối nếu cần dùng sau này (ví dụ frontend hiển thị)
-                return "uploads/" + folderName + "/" + fileName;
+                InetAddress localHost = InetAddress.getLocalHost();
+                String host = localHost.getHostAddress(); // hoặc .getHostName()
+                String url = "http://" + host + ":8080/uploads/" + folderName + "/" + fileName;
+                return url;
             } catch (IOException e) {
                 e.printStackTrace();
             }
