@@ -5,7 +5,10 @@ import com.example.test.entity.*;
 import com.example.test.repository.*;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
+import org.json.JSONArray;
+import org.json.JSONObject;
 import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.security.core.Authentication;
@@ -24,6 +27,8 @@ import java.util.stream.Collectors;
 public class JobRotationService {
 
     private final JobRotationRepository jobRotationRepository;
+    private final JobRotationTempRepository jobRotationTempRepository;
+
     private final VehicleRepository vehicleRepository;
     private final RotationLogRepository rotationLogRepository;
     private final DriverRatingRepository driverRatingRepository;
@@ -32,8 +37,8 @@ public class JobRotationService {
     private final SimpMessagingTemplate messagingTemplate;
     private final StaffRepository staffRepository;
     private final FirebaseMessagingService firebaseMessagingService;
-    private final JobRotationTempRepository jobRotationTempRepository;
     private final PriorityAllocatorService priorityAllocatorService;
+    private final RouteOptimizationService routeOptimizationService;
 
     public List<JobRotationDetailDTO> getMyJobRotationsByDate(String userName, LocalDate date) {
         return jobRotationRepository.findByUserNameAndDate(userName, date);
@@ -55,8 +60,28 @@ public class JobRotationService {
         int affected = jobRotationRepository.updateLateJobRotations();
         System.out.println("Updated " + affected + " job rotations to LATE status.");
     }
+
+    @Scheduled(cron = "0 25 16 * * *", zone = "Asia/Ho_Chi_Minh")
+    public void assignCollector() {
+        List<JobPosition> positions = jobPositionRepository.findByStatusAndUserIdNotNull("ACTIVE");
+        for (JobPosition jobPosition : positions) {
+            JobRotation jobRotation = new JobRotation();
+            jobRotation.setJobPositionId(jobPosition.getId());
+            jobRotation.setRole("COLLECTOR");
+            jobRotation.setRotationDate(LocalDate.now());
+            jobRotation.setShiftId(2);
+            jobRotation.setStaffId(jobPosition.getUserId());
+            jobRotation.setStatus("PENDING");
+            jobRotation.setCreatedAt(LocalDateTime.now());
+            jobRotation.setUpdatedAt(LocalDateTime.now());
+            jobRotationRepository.save(jobRotation);
+        }
+        System.out.println("Assigned " + positions.size() + " job rotations.");
+
+    }
+
     @Transactional
-    public MarkCompletionResponse markDriverJobCompleted(MarkCompletionRequest request, Integer driverId) {
+    public MarkCompletionResponse markDriverJobCompleted(MarkCompletionRequest request, Staff driver) {
         MarkCompletionResponse response = new MarkCompletionResponse();
 
         if (request.getJobRotationId() == null) {
@@ -65,7 +90,7 @@ public class JobRotationService {
             return response;
         }
 
-        Optional<JobRotation> jobRotationOpt = jobRotationRepository.findById(request.getJobRotationId());
+        Optional<JobRotationTemp> jobRotationOpt = jobRotationTempRepository.findById(request.getJobRotationId());
 
         if (jobRotationOpt.isEmpty()) {
             response.setSuccess(false);
@@ -73,18 +98,11 @@ public class JobRotationService {
             return response;
         }
 
-        JobRotation jobRotation = jobRotationOpt.get();
+        JobRotationTemp jobRotation = jobRotationOpt.get();
 
-        // Kiểm tra quyền sở hữu công việc
-        if (!jobRotation.getStaffId().equals(driverId)) {
+        if (!jobRotation.getStaffId().equals(driver.getId())) {
             response.setSuccess(false);
             response.setMessage("Công việc không thuộc về tài xế hiện tại");
-            return response;
-        }
-
-        if (!"DRIVER".equals(jobRotation.getRole())) {
-            response.setSuccess(false);
-            response.setMessage("Chỉ tài xế mới có thể thực hiện hành động này");
             return response;
         }
 
@@ -93,46 +111,37 @@ public class JobRotationService {
             response.setMessage("Công việc không ở trạng thái có thể hoàn thành");
             return response;
         }
-
-        // Đánh dấu công việc hiện tại hoàn thành
         jobRotation.setStatus("COMPLETED");
         jobRotation.setUpdatedAt(LocalDateTime.now());
-        jobRotationRepository.save(jobRotation);
+        jobRotationTempRepository.save(jobRotation);
 
-        // Kiểm tra xem có còn công việc nào khác của tài xế trong cùng ca và ngày không
-        List<JobRotation> remainingJobs = jobRotationRepository.findByStaffIdAndRotationDateAndShiftIdAndStatusNot(
-                driverId,
-                jobRotation.getRotationDate(),
-                jobRotation.getShiftId(),
-                "COMPLETED"
-        );
-        messagingTemplate.convertAndSend("/topic/assigned-driver",
-                new JobDriverCompletedMessage(jobRotation.getId(), staffRepository.findFullNameById(driverId),driverId, "COMPLETED",jobRotation.getVehicleId(),jobRotation.getShiftId(),jobRotation.getTonnage(),jobRotation.getRotationDate()));
-        // Nếu không còn công việc nào khác, reset trạng thái xe
-        if (remainingJobs.isEmpty()) {
-            Optional<Vehicle> vehicleOpt = vehicleRepository.findById(jobRotation.getVehicleId());
-            if (vehicleOpt.isPresent()) {
-                Vehicle vehicle = vehicleOpt.get();
-                // Reset lại tải trọng còn lại về tải trọng ban đầu
-                vehicle.setRemainingTonnage(vehicle.getTonnage());
-                vehicle.setStatus("AVAILABLE");
-                vehicleRepository.save(vehicle);
-                messagingTemplate.convertAndSend("/topic/vehicle-updates",
-                        new VehicleStatusUpdatedMessage(vehicle.getId(), vehicle.getStatus(), vehicle.getRemainingTonnage()));
-                response.setSuccess(true);
-                response.setMessage("Đã hoàn thành tất cả công việc trong ca. Xe đã được reset về trạng thái ban đầu.");
-                response.setUpdatedAt(LocalDateTime.now());
-            } else {
-                response.setSuccess(true);
-                response.setMessage("Đã hoàn thành công việc nhưng không tìm thấy thông tin xe để reset");
-                response.setUpdatedAt(LocalDateTime.now());
-            }
-        } else {
-            response.setSuccess(true);
-            response.setMessage("Đã hoàn thành công việc tại điểm này. Còn " + remainingJobs.size() + " điểm khác cần hoàn thành.");
-            response.setUpdatedAt(LocalDateTime.now());
+        Vehicle vehicle = vehicleRepository.findById(jobRotation.getVehicleId()).orElse(null);
+        if (vehicle != null) {
+            BigDecimal current = vehicle.getCurrentTonnage() != null
+                    ? vehicle.getCurrentTonnage()
+                    : BigDecimal.ZERO;
+            BigDecimal added = jobRotation.getTonnage() != null
+                    ? jobRotation.getTonnage()
+                    : BigDecimal.ZERO;
+
+            vehicle.setCurrentTonnage(current.add(added));
+            vehicleRepository.save(vehicle);
+            messagingTemplate.convertAndSend("/topic/vehicle-updates", vehicle);
         }
 
+
+        JobUpdateDTO message = new JobUpdateDTO();
+        message.setJobRotationId(jobRotation.getId());
+        message.setFullName(driver.getFullName());
+        Shift shift = shiftRepository.findById(jobRotation.getShiftId())
+                .orElse(null);
+        message.setShift(shift.getName());
+        message.setTonnage(jobRotation.getTonnage());
+        message.setStatus(jobRotation.getStatus());
+        messagingTemplate.convertAndSend("/topic/job-driver-updates", message);
+
+        response.setMessage("Job rotation completed");
+        response.setSuccess(true);
         return response;
     }
     private record JobDriverCompletedMessage(Integer jobId, String name,Integer driverId, String status,Integer vehicleId,Integer shiftId, BigDecimal remainingTonnage,LocalDate rotationDate) {}
@@ -152,7 +161,7 @@ public class JobRotationService {
         if (assignedDrivers.isEmpty()) return -1;
 
         // 2. Lấy danh sách xe, sắp xếp theo remainingTonnage giảm dần
-        List<Vehicle> vehicles = vehicleRepository.findAll();
+        List<Vehicle> vehicles = vehicleRepository.findByStatus("AVAILABLE");
         vehicles.sort((a, b) -> b.getRemainingTonnage().compareTo(a.getRemainingTonnage()));
         if (vehicles.isEmpty()) return -2;
 
@@ -169,15 +178,26 @@ public class JobRotationService {
             List<JobRotationTemp> bestSubset = assignRotationForVehicle(jobRotations, vehicle, driver.getStaffId());
             jobRotations.removeAll(bestSubset);
 
-            // Nếu driver này không được gán job nào -> cộng điểm
+//            firebaseMessagingService.sendToAllTokensByStaffId(
+//                    driver.getStaffId(),
+//                    "Đã đến giờ làm việc",
+//                    "Bạn được phân công " + bestSubset.size() + " điểm thu gom.\nXe: " + vehicle.getLicensePlate(),
+//                    "info"
+//            );
+
             if (bestSubset.isEmpty()) {
                 driver.setStatus("UNASSIGNED");
                 rotationLogRepository.save(driver);
                 staffRepository.changeCarryPoints(driver.getStaffId(), 1);
+//                firebaseMessagingService.sendToAllTokensByStaffId(
+//                        driver.getStaffId(),
+//                        "Thông báo công việc",
+//                        "Hôm nay không còn điểm thu gom nào cả.\nBạn sẽ được cộng điểm ưu tiên vào lần sau.",
+//                        "info"
+//                );
             }
         }
 
-        // 5. Nếu còn collector chưa gán -> không đủ xe
         if (!jobRotations.isEmpty()) {
             return -2;
         }
@@ -210,13 +230,13 @@ public class JobRotationService {
             }
         }
 
-        // Nếu không có collector phù hợp, trả về rỗng
         if (bestSubset.isEmpty()) {
             return bestSubset;
         }
-
-        // Gán các bãi vào xe cho driver
+        List<JobRotationTemp> temps = new ArrayList<>();
         for (JobRotationTemp job : bestSubset) {
+            job.setVehicleId(vehicle.getId());
+            jobRotationTempRepository.save(job);
             JobRotationTemp jobDriver = new JobRotationTemp();
             jobDriver.setVehicleId(vehicle.getId());
             jobDriver.setJobPositionId(job.getJobPositionId());
@@ -229,13 +249,25 @@ public class JobRotationService {
             jobDriver.setStatus("PENDING");
             jobDriver.setStaffId(idDriver);
             jobRotationTempRepository.save(jobDriver);
+
+
+            temps.add(jobDriver);
         }
 
         // Trừ tải trọng còn lại
         vehicle.setRemainingTonnage(vehicle.getRemainingTonnage().subtract(bestSum));
+        vehicle.setStatus("IN_USE");
         vehicleRepository.save(vehicle);
+
+
+        Map<String, Object> result = routeOptimizationService.optimizeRoute(temps, vehicle);
+        routeOptimizationService.convertAndSaveRoute(result);
         return bestSubset;
     }
+
+
+
+
 
     /**
      * Khi tài xế hoàn thành công việc -> reset carry_points = 0

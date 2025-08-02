@@ -14,9 +14,10 @@ import java.util.List;
 public class FirebaseMessagingService {
     @Autowired
     private final FcmRepository fcmRepository;
-
-    public FirebaseMessagingService(FcmRepository fcmRepository) {
+    private final NotificationService notificationService;
+    public FirebaseMessagingService(FcmRepository fcmRepository, NotificationService notificationService) {
         this.fcmRepository = fcmRepository;
+        this.notificationService = notificationService;
     }
 
     public void sendNotificationToToken(String fcmToken, String title, String body) {
@@ -43,7 +44,8 @@ public class FirebaseMessagingService {
             System.err.println("❌ Error sending FCM: " + e.getMessage());
         }
     }
-    public void sendToAllTokensByStaffId(Integer staffId, String title, String body) {
+    public void sendToAllTokensByStaffId(Integer staffId, String title, String body, String type) {
+        notificationService.createNotification(staffId, title, body, type);
         List<FCMToken> tokens = fcmRepository.findByStaffId(staffId);
         for (FCMToken token : tokens) {
             sendNotificationToToken(token.getToken(), title, body);

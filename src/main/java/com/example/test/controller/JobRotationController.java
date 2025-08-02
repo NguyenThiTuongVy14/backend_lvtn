@@ -5,6 +5,7 @@ import com.example.test.entity.*;
 import com.example.test.repository.*;
 import com.example.test.service.JobRotationService;
 import com.example.test.service.PriorityAllocatorService;
+import com.example.test.service.RouteOptimizationService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
@@ -34,11 +35,12 @@ public class JobRotationController {
     private final SimpMessagingTemplate messagingTemplate;
     private final JobRotationTempRepository jobRotationTempRepository;
     private final PriorityAllocatorService  priorityAllocatorService;
-
+    private final RouteOptimizationService routeOptimizationService;
+    private final RouteRepository routeRepository;
     @Autowired
     public JobRotationController(JobRotationRepository jobRotationRepository,
                                  JobRotationService jobRotationService,
-                                 StaffRepository staffRepository, ShiftRepository shiftRepository, VehicleRepository vehicleRepository, RotationLogRepository rotationLogRepository, DriverRatingRepository driverRatingRepository, JobPositionRepository jobPositionRepository, SimpMessagingTemplate messagingTemplate, JobRotationTempRepository jobRotationTempRepository, PriorityAllocatorService priorityAllocatorService) {
+                                 StaffRepository staffRepository, ShiftRepository shiftRepository, VehicleRepository vehicleRepository, RotationLogRepository rotationLogRepository, DriverRatingRepository driverRatingRepository, JobPositionRepository jobPositionRepository, SimpMessagingTemplate messagingTemplate, JobRotationTempRepository jobRotationTempRepository, PriorityAllocatorService priorityAllocatorService, RouteOptimizationService routeOptimizationService, RouteRepository routeRepository) {
         this.jobRotationRepository = jobRotationRepository;
         this.jobRotationService = jobRotationService;
         this.staffRepository = staffRepository;
@@ -49,6 +51,8 @@ public class JobRotationController {
         this.messagingTemplate = messagingTemplate;
         this.jobRotationTempRepository = jobRotationTempRepository;
         this.priorityAllocatorService = priorityAllocatorService;
+        this.routeOptimizationService = routeOptimizationService;
+        this.routeRepository = routeRepository;
     }
 
 
@@ -64,37 +68,37 @@ public class JobRotationController {
     }
 
     // Lấy lịch phân công theo ID
-    @GetMapping("/{id}")
-    public ResponseEntity<?> getJobRotationById(@PathVariable Integer id) {
-        try {
-            Optional<JobRotation> rotation = jobRotationRepository.findById(id);
-            if (rotation.isEmpty()) {
-                return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                        .body(new ErrorMessage("Lịch phân công không tìm thấy"));
-            }
-
-            // Kiểm tra quyền truy cập
-            String username = SecurityContextHolder.getContext().getAuthentication().getName();
-            Staff currentUser = staffRepository.findByUserName(username);
-            if (currentUser == null) {
-                return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                        .body(new ErrorMessage("Người dùng không hợp lệ"));
-            }
-
-            // Nếu không phải ADMIN, chỉ cho phép xem lịch của chính mình
-            Optional<String> authority = staffRepository.findAuthorityNameByStaffId(currentUser.getId());
-            if (!authority.orElse("").equals("ADMIN") &&
-                    !rotation.get().getStaffId().equals(currentUser.getId())) {
-                return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                        .body(new ErrorMessage("Không có quyền truy cập"));
-            }
-
-            return ResponseEntity.ok(rotation.get());
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(new ErrorMessage("Lỗi khi lấy lịch phân công: " + e.getMessage()));
-        }
-    }
+//    @GetMapping("/{id}")
+//    public ResponseEntity<?> getJobRotationById(@PathVariable Integer id) {
+//        try {
+//            Optional<JobRotation> rotation = jobRotationRepository.findById(id);
+//            if (rotation.isEmpty()) {
+//                return ResponseEntity.status(HttpStatus.NOT_FOUND)
+//                        .body(new ErrorMessage("Lịch phân công không tìm thấy"));
+//            }
+//
+//            // Kiểm tra quyền truy cập
+//            String username = SecurityContextHolder.getContext().getAuthentication().getName();
+//            Staff currentUser = staffRepository.findByUserName(username);
+//            if (currentUser == null) {
+//                return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+//                        .body(new ErrorMessage("Người dùng không hợp lệ"));
+//            }
+//
+//            // Nếu không phải ADMIN, chỉ cho phép xem lịch của chính mình
+//            Optional<String> authority = staffRepository.findAuthorityNameByStaffId(currentUser.getId());
+//            if (!authority.orElse("").equals("ADMIN") &&
+//                    !rotation.get().getStaffId().equals(currentUser.getId())) {
+//                return ResponseEntity.status(HttpStatus.FORBIDDEN)
+//                        .body(new ErrorMessage("Không có quyền truy cập"));
+//            }
+//
+//            return ResponseEntity.ok(rotation.get());
+//        } catch (Exception e) {
+//            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+//                    .body(new ErrorMessage("Lỗi khi lấy lịch phân công: " + e.getMessage()));
+//        }
+//    }
 
 
     // Lấy lịch phân công của nhân viên theo ID (chỉ ADMIN)
@@ -195,9 +199,8 @@ public class JobRotationController {
     public ResponseEntity<?> collectorMarkCompleted(@RequestBody CollectorCompletionRequest request) {
         String username = SecurityContextHolder.getContext().getAuthentication().getName();
         Staff collector = staffRepository.findByUserName(username);
-
-        Optional<JobRotationTemp> jobOpt = jobRotationTempRepository.findById(request.getJobRotationId());
-        if (jobOpt.isEmpty() || !jobOpt.get().getStaffId().equals(collector.getId())) {
+        Optional<JobRotationTemp> jobOpt = jobRotationTempRepository.findByIdAndStaffId(request.getJobRotationId(), collector.getId());
+        if (jobOpt.isEmpty()) {
             return ResponseEntity.badRequest().body(new ErrorMessage("Công việc không hợp lệ hoặc không thuộc về bạn"));
         }
         if (jobOpt.get().getStatus().equals("COMPLETED")) {
@@ -209,24 +212,36 @@ public class JobRotationController {
         job.setStatus("COMPLETED");
         job.setUpdatedAt(LocalDateTime.now());
         jobRotationTempRepository.save(job);
+
+        JobUpdateDTO message = new JobUpdateDTO();
+        message.setJobRotationId(job.getId());
+        message.setFullName(collector.getFullName());
+        Shift shift = shiftRepository.findById(job.getShiftId())
+                .orElse(null);
+        message.setShift(shift.getName());
+        message.setTonnage(job.getTonnage());
+        message.setStatus(job.getStatus());
+        messagingTemplate.convertAndSend("/topic/job-collector-updates", message);
         return ResponseEntity.ok(new ResponseMessage("Đã hoàn thành " + request.getSmallTrucksCount() + " xe đẩy nhỏ (~" + request.getSmallTrucksCount()*0.5 + " tấn)"));
     }
 
     @GetMapping("/assign-vehicle")
-    public ResponseEntity<?> assignVehicle(
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
-
+    public ResponseEntity<?> assignVehicle(@RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
         LocalDate target = (date != null) ? date : LocalDate.now();
         int result = jobRotationService.assignAllVehicles(target);
-
         if (result == 1) {
             return ResponseEntity.ok(new ResponseMessage("Đã phân công xe cho tài xế ASSIGNED"));
+
         } else if (result == -1) {
             return ResponseEntity.badRequest().body(new ErrorMessage("Không đủ tài xế"));
         } else {
             return ResponseEntity.badRequest().body(new ErrorMessage("Không đủ xe"));
         }
+
     }
+
+
+
 
     @GetMapping("/test-promote")
     public ResponseEntity<?> testPromote(@RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
@@ -254,16 +269,14 @@ public class JobRotationController {
         }
 
         try {
-            // Lấy thông tin user hiện tại
             String username = SecurityContextHolder.getContext().getAuthentication().getName();
             Staff currentDriver = staffRepository.findByUserName(username);
-
             if (currentDriver == null) {
                 return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                         .body(new ErrorMessage("Không tìm thấy thông tin tài xế"));
             }
 
-            MarkCompletionResponse response = jobRotationService.markDriverJobCompleted(request, currentDriver.getId());
+            MarkCompletionResponse response = jobRotationService.markDriverJobCompleted(request, currentDriver);
             jobRotationService.resetCarryPointsAfterCompleted(currentDriver.getId());
             return response.isSuccess() ? ResponseEntity.ok(response) : ResponseEntity.badRequest().body(response);
         } catch (Exception e) {
@@ -277,27 +290,53 @@ public class JobRotationController {
         String username = SecurityContextHolder.getContext().getAuthentication().getName();
         Staff driver = staffRepository.findByUserName(username);
 
-        List<JobRotation> jobs = jobRotationRepository.findCurrentDriverJobs(driver.getId(), LocalDate.now(), "PENDING");
+        List<JobRotationTemp> jobs = jobRotationTempRepository.findByStaffId(driver.getId());
         if (jobs.isEmpty()) {
-            return ResponseEntity.ok(new ResponseMessage("Không có công việc cần thực hiện hôm nay"));
+            return ResponseEntity.ok(new ResponseMessage("Không có công việc cần thực hiện"));
         }
 
+        Optional<Vehicle> vehicleOpt = vehicleRepository.findById(jobs.get(0).getVehicleId());
+        if (vehicleOpt.isEmpty()) {
+            return ResponseEntity.ok(new ResponseMessage("Xe không hợp lệ"));
+        }
+        Vehicle vehicle = vehicleOpt.get();
+        List<Route> routes = routeRepository.findByVehicleId(vehicle.getId());
         List<DriverRouteResponse> optimizedRoutes = new ArrayList<>();
+        optimizedRoutes.add(newDriverRoute(routes.getFirst(),999));
+        for (Route route : routes) {
+            Optional<JobRotationTemp> jobOpt = jobs.stream()
+                    .filter(job -> job.getId().equals(route.getRotationId()))
+                    .findFirst();
 
-        for (JobRotation job : jobs) {
-            Vehicle vehicle = vehicleRepository.findById(job.getVehicleId())
-                    .orElseThrow(() -> new RuntimeException("Không tìm thấy thông tin xe với id: " + job.getVehicleId()));
-            JobPosition position = jobPositionRepository.findById(job.getJobPositionId())
-                    .orElseThrow(() -> new RuntimeException("Không tìm thấy điểm thu gom với id: " + job.getJobPositionId()));
+            if (jobOpt.isPresent()) {
+                JobRotationTemp job = jobOpt.get();
+                Optional<JobPosition> positionOpt = jobPositionRepository.findById(job.getJobPositionId());
+                positionOpt.ifPresent(jobPosition -> optimizedRoutes.add(newDriverRoute(route, jobPosition.getId())));
+            }
 
-            optimizedRoutes.add(new DriverRouteResponse(job.getId(), vehicle, position));
+
         }
+        optimizedRoutes.add(newDriverRoute(routes.getLast(),1000));
 
         Map<String, Object> response = new HashMap<>();
-        response.put("message", "Tối ưu hóa lộ trình thành công");
+        response.put("vehicle", vehicle);
         response.put("routes", optimizedRoutes);
+        response.put("message", "Tối ưu hóa lộ trình thành công");
 
         return ResponseEntity.ok(response);
+    }
+    private DriverRouteResponse newDriverRoute(Route route, Integer positionID) {
+        Optional<JobPosition> jobPosition = jobPositionRepository.findById(positionID);
+        JobPositionDTO dto = new JobPositionDTO();
+        dto.setId(jobPosition.get().getId());
+        dto.setAddress(jobPosition.get().getAddress());
+        dto.setLat(jobPosition.get().getLat());
+        dto.setLng(jobPosition.get().getLng());
+        dto.setName(jobPosition.get().getName());
+        dto.setIndex(route.getIndex());
+        dto.setArrival(route.getArrival());
+        dto.setType(route.getType());
+        return new DriverRouteResponse(null, dto);
     }
 
     // Các record và class hỗ trợ

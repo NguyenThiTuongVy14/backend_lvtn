@@ -25,6 +25,9 @@ public class JobPosition {
 
     private String status;//ACTIVE; INACTIVE
 
+    @Column(name = "staff_id")
+    private Integer userId;
+
     @Column(name = "created_by")
     private Integer createdBy; // ID của admin tạo điểm làm việc
 

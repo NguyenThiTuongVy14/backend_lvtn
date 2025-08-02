@@ -18,12 +18,9 @@ public class JobPositionDTO {
     private BigDecimal lat;
     private BigDecimal lng;
     private LocalDateTime createdAt;
+    private Integer index;
+    private Integer arrival;
+    private String type;
 
-    public JobPositionDTO(Integer positionId, String jobPositionName, BigDecimal lat, BigDecimal lng, String address) {
-        this.id = positionId;
-        this.name = jobPositionName;
-        this.lat = lat;
-        this.lng = lng;
-        this.address = address;
-    }
+
 }

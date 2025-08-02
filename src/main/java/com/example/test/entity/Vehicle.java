@@ -25,4 +25,8 @@ public class Vehicle {
    private String image;
 
    private BigDecimal remainingTonnage;
+
+    @Column(name = "current_tonnage")
+   private BigDecimal currentTonnage;
+
 }

@@ -1,17 +1,20 @@
 package com.example.test.dto;
 
-import com.example.test.entity.JobPosition;
-import com.example.test.entity.Vehicle;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.math.BigDecimal;
+
+@Data
 @AllArgsConstructor
 @NoArgsConstructor
-@Data
-public class DriverRouteResponse {
+public class JobUpdateDTO {
     private Integer jobRotationId;
+    private String fullName;
 //    private Vehicle vehicle;
-    private JobPositionDTO position;
-
+    private String status;
+    private String shift;
+    private int smallTrucksCount;
+    private BigDecimal tonnage;
 }

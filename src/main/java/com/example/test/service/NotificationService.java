@@ -11,19 +11,27 @@ import java.util.Optional;
 
 @Service
 public class NotificationService {
-    @Autowired
-    private SimpMessagingTemplate simpMessagingTemplate;
+
     @Autowired
     private NotificationRepository notificationRepository;
 
-    public void sendAdminAlert(String message) {
-        simpMessagingTemplate.convertAndSend("/topic/admin-alerts", message);
-        System.out.println("Đã gửi cảnh báo thiếu tài xế cho admin: " + message);
-    }
 
     public List<Notification> getNotificationsByUserId(Integer userId) {
         return notificationRepository.findByUserIdOrderByCreatedAtDesc(userId);
     }
+    public void createNotification(Integer userId, String title, String content, String type) {
+        Notification notification = new Notification();
+        notification.setUserId(userId);
+        notification.setTitle(title);
+        notification.setContent(content);
+        notification.setType(type);
+        notification.setIsRead(false);
+        notification.setCreatedAt(java.time.LocalDateTime.now());
+
+        notificationRepository.save(notification);
+    }
+
+
 
     public boolean markAsRead(Integer id) {
         Optional<Notification> optional = notificationRepository.findById(id);

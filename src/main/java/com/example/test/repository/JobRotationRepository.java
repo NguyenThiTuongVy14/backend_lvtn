@@ -4,6 +4,7 @@ import com.example.test.dto.DriverJobWithCollectorStatusDTO;
 import com.example.test.dto.JobRotationDetailDTO;
 import com.example.test.entity.JobPosition;
 import com.example.test.entity.JobRotation;
+import com.example.test.entity.JobRotationTemp;
 import jakarta.transaction.Transactional;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
@@ -219,4 +220,6 @@ public interface JobRotationRepository extends JpaRepository<JobRotation, Intege
             @Param("shiftId") Integer shiftId,
             @Param("excludeStatus") String excludeStatus
     );
+
+    Optional<JobRotation> findById(Integer id);
 }

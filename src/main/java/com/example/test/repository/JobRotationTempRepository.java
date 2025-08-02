@@ -226,4 +226,7 @@ public interface JobRotationTempRepository extends JpaRepository<JobRotationTemp
 
     @Modifying
     @Query("delete from JobRotationTemp j where j.rotationDate = :date")
-    void deleteAllByRotationDate(@Param("date") LocalDate date);}
+    void deleteAllByRotationDate(@Param("date") LocalDate date);
+
+    Optional<JobRotationTemp> findByIdAndStaffId(Integer id, Integer staffId);
+}
