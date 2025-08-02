@@ -199,21 +199,21 @@ public class JobRotationService {
                 driver.setStatus("UNASSIGNED");
                 rotationLogRepository.save(driver);
                 staffRepository.changeCarryPoints(driver.getStaffId(), 1);
-//                firebaseMessagingService.sendToAllTokensByStaffId(
-//                        driver.getStaffId(),
-//                        "Thông báo công việc",
-//                        "Hôm nay không còn điểm thu gom nào cả.\nBạn sẽ được cộng điểm ưu tiên vào lần sau.",
-//                        "info"
-//                );
+                firebaseMessagingService.sendToAllTokensByStaffId(
+                        driver.getStaffId(),
+                        "Thông báo công việc",
+                        "Hôm nay không còn điểm thu gom nào cả.\nBạn sẽ được cộng điểm ưu tiên vào lần sau.",
+                        "info"
+                );
             }
             else {
                 resetCarryPointsAfterCompleted(driver.getId());
-//                firebaseMessagingService.sendToAllTokensByStaffId(
-//                    driver.getStaffId(),
-//                    "Đã đến giờ làm việc",
-//                    "Bạn được phân công " + bestSubset.size() + " điểm thu gom.\nXe: " + vehicle.getLicensePlate(),
-//                    "info"
-//            );
+                firebaseMessagingService.sendToAllTokensByStaffId(
+                    driver.getStaffId(),
+                    "Đã đến giờ làm việc",
+                    "Bạn được phân công " + bestSubset.size() + " điểm thu gom.\nXe: " + vehicle.getLicensePlate(),
+                    "info"
+            );
             }
         }
 
