@@ -13,5 +13,6 @@ public class DriverRouteResponse {
     private Integer jobRotationId;
 //    private Vehicle vehicle;
     private JobPositionDTO position;
+    private String status;
 
 }

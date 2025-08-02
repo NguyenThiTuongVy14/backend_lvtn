@@ -5,22 +5,16 @@ import com.example.test.entity.*;
 import com.example.test.repository.*;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
-import org.json.JSONArray;
-import org.json.JSONObject;
-import org.springframework.data.domain.Sort;
-import org.springframework.data.jpa.repository.Lock;
+
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.core.userdetails.UserDetails;
+
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.*;
-import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -31,7 +25,6 @@ public class JobRotationService {
 
     private final VehicleRepository vehicleRepository;
     private final RotationLogRepository rotationLogRepository;
-    private final DriverRatingRepository driverRatingRepository;
     private final JobPositionRepository jobPositionRepository;
     private final ShiftRepository shiftRepository;
     private final SimpMessagingTemplate messagingTemplate;
@@ -39,6 +32,7 @@ public class JobRotationService {
     private final FirebaseMessagingService firebaseMessagingService;
     private final PriorityAllocatorService priorityAllocatorService;
     private final RouteOptimizationService routeOptimizationService;
+    private final RouteRepository routeRepository;
 
     public List<JobRotationDetailDTO> getMyJobRotationsByDate(String userName, LocalDate date) {
         return jobRotationRepository.findByUserNameAndDate(userName, date);
@@ -106,7 +100,7 @@ public class JobRotationService {
             return response;
         }
 
-        if (!"PENDING".equals(jobRotation.getStatus()) && !"ASSIGNED".equals(jobRotation.getStatus())) {
+        if (!"PENDING".equals(jobRotation.getStatus()) && !"PROCESSING".equals(jobRotation.getStatus())) {
             response.setSuccess(false);
             response.setMessage("Công việc không ở trạng thái có thể hoàn thành");
             return response;
@@ -139,6 +133,28 @@ public class JobRotationService {
         message.setTonnage(jobRotation.getTonnage());
         message.setStatus(jobRotation.getStatus());
         messagingTemplate.convertAndSend("/topic/job-driver-updates", message);
+
+        Optional<Route> route = routeRepository.findRouteByRotationId(request.getJobRotationId());
+        List<Route> routes = routeRepository.findByVehicleId(vehicle.getId());
+        for (Route routeItem : routes) {
+            if(routeItem.getIndex() - 1 == route.get().getIndex()) {
+                if(routeItem.getRotationId() == null){
+                    continue;
+                }
+                Optional<JobRotationTemp> job = jobRotationTempRepository.findById(routeItem.getRotationId());
+                if(job.isPresent()) {
+                    JobRotationTemp jobTemp = job.get();
+                    jobTemp.setStatus("PROCESSING");
+                    jobTemp.setUpdatedAt(LocalDateTime.now());
+                    jobRotationTempRepository.save(jobTemp);
+                }
+//                else{
+//                    response.setMessage("Đã hoàn thành tất cả công việc");
+//                    response.setSuccess(true);
+//                    return response;
+//                }
+            }
+        }
 
         response.setMessage("Job rotation completed");
         response.setSuccess(true);
@@ -178,12 +194,6 @@ public class JobRotationService {
             List<JobRotationTemp> bestSubset = assignRotationForVehicle(jobRotations, vehicle, driver.getStaffId());
             jobRotations.removeAll(bestSubset);
 
-//            firebaseMessagingService.sendToAllTokensByStaffId(
-//                    driver.getStaffId(),
-//                    "Đã đến giờ làm việc",
-//                    "Bạn được phân công " + bestSubset.size() + " điểm thu gom.\nXe: " + vehicle.getLicensePlate(),
-//                    "info"
-//            );
 
             if (bestSubset.isEmpty()) {
                 driver.setStatus("UNASSIGNED");
@@ -195,6 +205,15 @@ public class JobRotationService {
 //                        "Hôm nay không còn điểm thu gom nào cả.\nBạn sẽ được cộng điểm ưu tiên vào lần sau.",
 //                        "info"
 //                );
+            }
+            else {
+                resetCarryPointsAfterCompleted(driver.getId());
+//                firebaseMessagingService.sendToAllTokensByStaffId(
+//                    driver.getStaffId(),
+//                    "Đã đến giờ làm việc",
+//                    "Bạn được phân công " + bestSubset.size() + " điểm thu gom.\nXe: " + vehicle.getLicensePlate(),
+//                    "info"
+//            );
             }
         }
 

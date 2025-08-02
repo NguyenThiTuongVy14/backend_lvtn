@@ -11,4 +11,5 @@ public class MarkCompletionResponse {
 //    private Integer jobRotationId;
 //    private String status;
     private LocalDateTime updatedAt;
+
 }

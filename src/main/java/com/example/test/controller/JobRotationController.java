@@ -277,7 +277,6 @@ public class JobRotationController {
             }
 
             MarkCompletionResponse response = jobRotationService.markDriverJobCompleted(request, currentDriver);
-            jobRotationService.resetCarryPointsAfterCompleted(currentDriver.getId());
             return response.isSuccess() ? ResponseEntity.ok(response) : ResponseEntity.badRequest().body(response);
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
@@ -302,7 +301,7 @@ public class JobRotationController {
         Vehicle vehicle = vehicleOpt.get();
         List<Route> routes = routeRepository.findByVehicleId(vehicle.getId());
         List<DriverRouteResponse> optimizedRoutes = new ArrayList<>();
-        optimizedRoutes.add(newDriverRoute(routes.getFirst(),999));
+        optimizedRoutes.add(newDriverRoute(routes.getFirst(),999, null));
         for (Route route : routes) {
             Optional<JobRotationTemp> jobOpt = jobs.stream()
                     .filter(job -> job.getId().equals(route.getRotationId()))
@@ -311,12 +310,12 @@ public class JobRotationController {
             if (jobOpt.isPresent()) {
                 JobRotationTemp job = jobOpt.get();
                 Optional<JobPosition> positionOpt = jobPositionRepository.findById(job.getJobPositionId());
-                positionOpt.ifPresent(jobPosition -> optimizedRoutes.add(newDriverRoute(route, jobPosition.getId())));
+                positionOpt.ifPresent(jobPosition -> optimizedRoutes.add(newDriverRoute(route, jobPosition.getId(),job.getStatus())));
             }
 
 
         }
-        optimizedRoutes.add(newDriverRoute(routes.getLast(),1000));
+        optimizedRoutes.add(newDriverRoute(routes.getLast(),1000, null));
 
         Map<String, Object> response = new HashMap<>();
         response.put("vehicle", vehicle);
@@ -325,7 +324,7 @@ public class JobRotationController {
 
         return ResponseEntity.ok(response);
     }
-    private DriverRouteResponse newDriverRoute(Route route, Integer positionID) {
+    private DriverRouteResponse newDriverRoute(Route route, Integer positionID, String status) {
         Optional<JobPosition> jobPosition = jobPositionRepository.findById(positionID);
         JobPositionDTO dto = new JobPositionDTO();
         dto.setId(jobPosition.get().getId());
@@ -336,7 +335,7 @@ public class JobRotationController {
         dto.setIndex(route.getIndex());
         dto.setArrival(route.getArrival());
         dto.setType(route.getType());
-        return new DriverRouteResponse(null, dto);
+        return new DriverRouteResponse(route.getRotationId(), dto, status);
     }
 
     // Các record và class hỗ trợ
