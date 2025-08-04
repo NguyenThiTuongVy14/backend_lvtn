@@ -34,9 +34,14 @@ public class JobRotationService {
     private final RouteOptimizationService routeOptimizationService;
     private final RouteRepository routeRepository;
 
-    public List<JobRotationDetailDTO> getMyJobRotationsByDate(String userName, LocalDate date) {
+    public List<JobRotationDetailDTO> getJobRotationsByDate(String userName, LocalDate date) {
+        if (date.equals(LocalDate.now())) {
+            return jobRotationTempRepository.findByUserNameAndDate(userName, LocalDate.now());
+        }
         return jobRotationRepository.findByUserNameAndDate(userName, date);
     }
+
+
 
     /**
      * Cron 12:00 trưa hằng ngày: push WAITLIST (ưu tiên carry_points) lên ASSIGNED nếu còn slot.

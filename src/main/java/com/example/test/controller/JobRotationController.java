@@ -131,12 +131,7 @@ public class JobRotationController {
         String username = SecurityContextHolder.getContext().getAuthentication().getName();
         System.out.println("Logged in username: " + username);
         List<JobRotationDetailDTO> rotations;
-        if (date != null) {
-            rotations = jobRotationService.getMyJobRotationsByDate(username, date);
-        } else {
-            rotations = jobRotationService.getMyJobRotationsByDate(username, LocalDate.now());
-        }
-
+        rotations = jobRotationService.getJobRotationsByDate(username, date);
         return ResponseEntity.ok(rotations);
     }
 
@@ -267,7 +262,6 @@ public class JobRotationController {
         if (request.getJobRotationId() == null) {
             return ResponseEntity.badRequest().body(new ErrorMessage("Thiếu thông tin jobRotationId hoặc tonnage"));
         }
-
         try {
             String username = SecurityContextHolder.getContext().getAuthentication().getName();
             Staff currentDriver = staffRepository.findByUserName(username);
@@ -275,7 +269,6 @@ public class JobRotationController {
                 return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                         .body(new ErrorMessage("Không tìm thấy thông tin tài xế"));
             }
-
             MarkCompletionResponse response = jobRotationService.markDriverJobCompleted(request, currentDriver);
             return response.isSuccess() ? ResponseEntity.ok(response) : ResponseEntity.badRequest().body(response);
         } catch (Exception e) {
