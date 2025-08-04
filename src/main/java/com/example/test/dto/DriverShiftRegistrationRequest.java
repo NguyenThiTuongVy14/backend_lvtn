@@ -8,8 +8,7 @@ import java.util.List;
 @Data
 public class DriverShiftRegistrationRequest {
     // Getters và Setters
-    private List<Integer> shiftId;
+    private List<LocalDate> dates;
 //    private Integer vehicleId;
-    private LocalDate rotationDate;
 
 }

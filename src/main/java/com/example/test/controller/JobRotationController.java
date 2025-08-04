@@ -137,47 +137,45 @@ public class JobRotationController {
 
     @Transactional
     @PostMapping("/driver/register-shift")
-    public ResponseEntity<?> registerDriverShift(@RequestBody List<DriverShiftRegistrationRequest> requests) {
+    public ResponseEntity<?> registerDriverShift(@RequestBody DriverShiftRegistrationRequest requests) {
         try {
             String username = SecurityContextHolder.getContext().getAuthentication().getName();
             Staff driver = staffRepository.findByUserName(username);
             Integer staffId = driver.getId();
-
             List<String> messages = new ArrayList<>();
+            List<Vehicle> vehicle = vehicleRepository.findByStatus("AVAILABLE");
+            for (LocalDate date:requests.getDates()) {
+                List<RotationLog> jobs = rotationLogRepository.findByRotationDate(date);
 
-            for (DriverShiftRegistrationRequest request : requests) {
-                LocalDate date = request.getRotationDate();
-
-                // B1: Đẩy WAITLIST có carry_points cao lên trước (nếu còn slot)
-                priorityAllocatorService.promoteWaitlistIfAny(date);
-
-                for (Integer shiftId : request.getShiftId()) {
-                    if (rotationLogRepository.existsByStaffIdAndShiftIdAndRotationDate(
-                            staffId, shiftId, date)) {
-                        throw new IllegalStateException("Đã đăng ký ca " + shiftId + " vào ngày " + date);
-                    }
-
-                    long currentAssigned = rotationLogRepository.countAssignedForUpdate(date);
-                    int capacity = (int) vehicleRepository.count();
-
-                    RotationLog log = new RotationLog();
-                    log.setStaffId(staffId);
-                    log.setShiftId(shiftId);
-                    log.setRequestedAt(LocalDateTime.now());
-                    log.setRotationDate(date);
-
-                    if (currentAssigned < capacity) {
-                        log.setStatus("ASSIGNED");
-                        log.setUpdatedAt(LocalDateTime.now());
-                        messages.add("Ngày " + date + " (ca " + shiftId + "): ĐÃ ĐƯỢC PHÂN CÔNG.");
-                    } else {
-                        log.setStatus("WAITLIST");
-                        messages.add("Ngày " + date + " (ca " + shiftId + "): HẾT CHỖ, bạn đang ở WAITLIST.");
-                    }
-
-                    rotationLogRepository.save(log);
+                RotationLog job = rotationLogRepository.findByStaffIdAndRotationDate(staffId,date);
+                if(job != null) {
+                    messages.add("Ngày: " + date + "đã được bạn đăng ký rồi");
+                    continue;
                 }
+                RotationLog rotationLog = new RotationLog();
+                if(jobs.size() > vehicle.size()) {
+                    rotationLog.setStaffId(staffId);
+                    rotationLog.setShiftId(2);
+                    rotationLog.setUpdatedAt(LocalDateTime.now());
+                    rotationLog.setStatus("WAITLIST");
+                    rotationLog.setRequestedAt(LocalDateTime.now());
+                    rotationLog.setRotationDate(date);
+                    rotationLogRepository.save(rotationLog);
+                    messages.add("Ngày: " + date + "đã đạt giới hạn đăng ký. Bạn đang ở queue");
+                    continue;
+                }
+                rotationLog.setStaffId(staffId);
+                rotationLog.setShiftId(2);
+                rotationLog.setUpdatedAt(LocalDateTime.now());
+                rotationLog.setStatus("ASSIGNED");
+                rotationLog.setRequestedAt(LocalDateTime.now());
+                rotationLog.setRotationDate(date);
+                rotationLogRepository.save(rotationLog);
+                messages.add("Ngày: " + date + "đăng ký thành công");
+
             }
+
+//
 
             return ResponseEntity.ok(new ResponseMessage(String.join("\n", messages)));
 

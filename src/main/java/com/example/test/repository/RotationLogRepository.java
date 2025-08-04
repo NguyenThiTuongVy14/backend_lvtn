@@ -60,4 +60,8 @@ public interface RotationLogRepository extends JpaRepository<RotationLog,Integer
        order by s.carryPoints desc, r.updatedAt asc
     """)
     List<RotationLog> findAssignedOrderByCarryPoints(@Param("date") LocalDate date);
+
+    List<RotationLog> findByRotationDate(LocalDate rotationDate);
+
+    RotationLog findByStaffIdAndRotationDate(Integer staffId, LocalDate date);
 }

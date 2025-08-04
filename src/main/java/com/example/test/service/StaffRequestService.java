@@ -79,8 +79,8 @@ public class StaffRequestService {
                 // Trả về path tương đối nếu cần dùng sau này (ví dụ frontend hiển thị)
                 InetAddress localHost = InetAddress.getLocalHost();
                 String host = localHost.getHostAddress(); // hoặc .getHostName()
-//                String url = "http://" + host + ":8080/uploads/" + folderName + "/" + fileName;
-                String url = "https://backend-springboot-latest.onrender.com/uploads/" + folderName + "/" + fileName;
+                String url = "http://" + host + ":8080/uploads/" + folderName + "/" + fileName;
+//                String url = "https://backend-springboot-latest.onrender.com/uploads/" + folderName + "/" + fileName;
 
                 return url;
             } catch (IOException e) {
